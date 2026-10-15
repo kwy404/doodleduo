@@ -36,7 +36,10 @@
     "links": "node scripts/check-links.mjs",
     "e2e": "node test/app-e2e.mjs",
     "shots": "node scripts/shots.mjs",
-    "serve": "node scripts/serve.mjs"
+    "serve": "node scripts/serve.mjs",
+    "sw": "node scripts/build-sw.mjs",
+    "sw:check": "node scripts/build-sw.mjs --check",
+    "icons": "node scripts/render-icons.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",

@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<meta name="color-scheme" content="dark light">
+<meta name="theme-color" content="#0c0e11">
+<script>(function(){try{var t=localStorage.getItem('doodleduo:theme');t=t?JSON.parse(t):'dark';var r=document.documentElement;r.setAttribute('data-theme',t==='light'?'light':'dark');r.style.colorScheme=t==='light'?'light':'dark'}catch(e){}})();</script>
+<title>doodleduo: draw together</title>
+<meta name="description" content="An infinite whiteboard you draw on together with friends at the same time, peer to peer in the browser.">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="../favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400..700&amp;family=Kalam:wght@400;700&amp;display=swap">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/monsooncss@0.2.0/dist/monsoon.min.css">
+<link rel="stylesheet" href="app.css">
+<script src="https://cdn.jsdelivr.net/npm/voodoojs@1.0.0/dist/voodoo.full.min.js" data-manual defer></script>
+<script type="module" src="js/main.js"></script>
+</head>
+<body class="bg-background text-foreground antialiased">
+<div id="app" class="app" :class="{ 'is-ready': S.ready, 'is-live': S.connected }">
+  <header class="topbar">
+    <div class="topbar-side">
+      <a class="brand" href="../" :aria-label="t('top.home')" :title="t('top.home')"><img src="icons/icon.svg" width="36" height="36" alt=""></a>
+      <input id="board-name" class="board-name" :value="S.boardName" @change="renameBoard($event.target.value)" @keydown.enter="$event.target.blur()" :aria-label="t('top.rename')" maxlength="80" spellcheck="false">
+      <button type="button" class="btn btn-ghost btn-sm top-boards" @click="openDialog('boards')"><svg class="ic" aria-hidden="true"><use href="icons.svg#i-boards"/></svg><span class="hide-sm" v-text="t('top.boards')">Boards</span></button>
+    </div>
+    <div class="topbar-side topbar-end">
+      <div class="people" :aria-label="t('people.label')" role="list">
+        <span v-for="p in S.people" :key="p.id" role="listitem" class="person" :style="{ '--c': p.color }" :title="p.me ? p.name + ' (' + t('people.you') + ')' : p.name" v-text="initial(p.name)"></span>
+      </div>
+      <span class="badge badge-soft live-badge" v-show="S.connected"><span class="live-dot" aria-hidden="true"></span><span v-text="t('people.live', { n: S.people.length })"></span></span>
+      <button id="join-btn" type="button" class="btn btn-ghost btn-sm" @click="openJoin()"><svg class="ic" aria-hidden="true"><use href="icons.svg#i-words"/></svg><span class="hide-sm" v-text="t('top.join')">Join</span></button>
+      <button id="invite-btn" type="button" class="btn btn-primary invite-btn" @click="invite()"><svg class="ic" aria-hidden="true"><use href="icons.svg#i-invite"/></svg><span v-text="t('top.invite')">Invite friends</span></button>
+      <button id="settings-btn" type="button" class="btn btn-ghost btn-square btn-sm" @click="openDialog('settings')" :aria-label="t('top.settings')" :title="t('top.settings')"><svg class="ic" aria-hidden="true"><use href="icons.svg#i-settings"/></svg></button>
+    </div>
+  </header>
+
+  <main id="stage" class="stage">
+    <canvas id="board" class="board" :aria-label="t('board.label')" role="img"></canvas>
+    <div id="cursors" class="cursors" aria-hidden="true" v-ignore></div>
+    <textarea id="text-editor" class="text-editor" hidden spellcheck="false" aria-label="Text" v-ignore></textarea>
+
+    <div class="empty-hint" v-show="S.empty">
+      <img src="../assets/head-dark.svg" width="72" height="72" alt="">
+      <p class="empty-title" v-text="t('empty.title')">Draw anything</p>
+      <p class="empty-text" v-text="t('empty.text')">Then press Invite friends to draw together.</p>
+    </div>
+
+    <div class="corner corner-start">
+      <button id="undo-btn" type="button" class="btn btn-ghost btn-square tool" @click="undo()" :disabled="!S.canUndo" :aria-label="t('tool.undo')" :title="t('tool.undo') + ' (Ctrl+Z)'"><svg class="ic" aria-hidden="true"><use href="icons.svg#i-undo"/></svg></button>
+      <button id="redo-btn" type="button" class="btn btn-ghost btn-square tool" @click="redo()" :disabled="!S.canRedo" :aria-label="t('tool.redo')" :title="t('tool.redo') + ' (Ctrl+Y)'"><svg class="ic" aria-hidden="true"><use href="icons.svg#i-redo"/></svg></button>
+    </div>
+    <div class="corner corner-end">
+      <button type="button" class="btn btn-ghost btn-square tool" @click="zoomBy(1 / 1.25)" :aria-label="t('zoom.out')" :title="t('zoom.out')"><svg class="ic" aria-hidden="true"><use href="icons.svg#i-zoom-out"/></svg></button>
+      <button type="button" class="btn btn-ghost btn-sm zoom-label" @click="resetZoom()" :title="t('zoom.reset')" v-text="S.zoom + '%'">100%</button>
+      <button type="button" class="btn btn-ghost btn-square tool" @click="zoomBy(1.25)" :aria-label="t('zoom.in')" :title="t('zoom.in')"><svg class="ic" aria-hidden="true"><use href="icons.svg#i-zoom-in"/></svg></button>
+      <button type="button" class="btn btn-ghost btn-square tool hide-xs" @click="fit()" :aria-label="t('zoom.fit')" :title="t('zoom.fit')"><svg class="ic" aria-hidden="true"><use href="icons.svg#i-fit"/></svg></button>
+    </div>
+
+    <div class="dock-wrap">
+      <div class="panel stylebar" v-show="S.selected > 0 || ['pen', 'hl', 'rect', 'ellipse', 'line', 'arrow', 'text', 'note'].includes(S.tool)">
+        <div class="swatches" role="radiogroup" :aria-label="t('style.color')" v-show="S.tool !== 'note'">
+          <button v-for="c in INKS" :key="c" type="button" class="swatch" role="radio" :aria-checked="S.color === c ? 'true' : 'false'" :aria-label="c === 'ink' ? t('style.ink') : c" :style="{ '--c': inkColor(c) }" @click="setColor(c)"></button>
+        </div>
+        <div class="swatches" role="radiogroup" :aria-label="t('style.note')" v-show="S.tool === 'note'">
+          <button v-for="c in NOTES" :key="c" type="button" class="swatch swatch-note" role="radio" :aria-checked="S.note === c ? 'true' : 'false'" :aria-label="c" :style="{ '--c': c }" @click="setNote(c)"></button>
+        </div>
+        <span class="divider-v" aria-hidden="true" v-show="S.tool !== 'note' && S.tool !== 'text'"></span>
+        <div class="sizes" role="radiogroup" :aria-label="t('style.size')" v-show="S.tool !== 'note' && S.tool !== 'text'">
+          <button v-for="n in [2, 4, 8]" :key="n" type="button" class="size-dot" role="radio" :aria-checked="S.size === n ? 'true' : 'false'" :aria-label="t('style.size') + ' ' + n" @click="setSize(n)"><i :style="{ width: (n + 4) + 'px', height: (n + 4) + 'px' }"></i></button>
+        </div>
+        <button type="button" class="btn btn-ghost btn-square btn-sm" v-show="S.tool === 'rect' || S.tool === 'ellipse'" :aria-pressed="S.fill ? 'true' : 'false'" :class="{ 'is-on': S.fill }" @click="toggleFill()" :aria-label="t('style.fill')" :title="t('style.fill')"><svg class="ic" aria-hidden="true"><use href="icons.svg#i-fill"/></svg></button>
+        <span class="divider-v" aria-hidden="true" v-show="S.selected > 0"></span>
+        <button id="dup-btn" type="button" class="btn btn-ghost btn-square btn-sm" v-show="S.selected > 0" @click="duplicate()" :aria-label="t('sel.duplicate')" :title="t('sel.duplicate') + ' (Ctrl+D)'"><svg class="ic" aria-hidden="true"><use href="icons.svg#i-duplicate"/></svg></button>
+        <button type="button" class="btn btn-ghost btn-square btn-sm" v-show="S.selected > 0" @click="toFront()" :aria-label="t('sel.front')" :title="t('sel.front')"><svg class="ic" aria-hidden="true"><use href="icons.svg#i-front"/></svg></button>
+        <button id="del-btn" type="button" class="btn btn-ghost btn-square btn-sm" v-show="S.selected > 0" @click="removeSelected()" :aria-label="t('sel.delete')" :title="t('sel.delete') + ' (Del)'"><svg class="ic" aria-hidden="true"><use href="icons.svg#i-trash"/></svg></button>
+      </div>
+
+      <div class="panel shapes-menu" v-show="S.shapes" role="menu">
+        <button type="button" class="btn btn-ghost btn-square tool" role="menuitem" @click="setTool('rect')" :aria-label="t('tool.rect')" :title="t('tool.rect') + ' (R)'"><svg class="ic" aria-hidden="true"><use href="icons.svg#i-rect"/></svg></button>
+        <button type="button" class="btn btn-ghost btn-square tool" role="menuitem" @click="setTool('ellipse')" :aria-label="t('tool.ellipse')" :title="t('tool.ellipse') + ' (O)'"><svg class="ic" aria-hidden="true"><use href="icons.svg#i-ellipse"/></svg></button>
+        <button type="button" class="btn btn-ghost btn-square tool" role="menuitem" @click="setTool('line')" :aria-label="t('tool.line')" :title="t('tool.line') + ' (L)'"><svg class="ic" aria-hidden="true"><use href="icons.svg#i-line"/></svg></button>
+        <button type="button" class="btn btn-ghost btn-square tool" role="menuitem" @click="setTool('arrow')" :aria-label="t('tool.arrow')" :title="t('tool.arrow') + ' (A)'"><svg class="ic" aria-hidden="true"><use href="icons.svg#i-arrow"/></svg></button>
+      </div>
+
+      <nav class="panel toolbar" :aria-label="t('tool.label')">
+        <button type="button" class="tool-btn" data-tool="select" :aria-pressed="S.tool === 'select' ? 'true' : 'false'" @click="setTool('select')" :aria-label="t('tool.select')" :title="t('tool.select') + ' (V)'"><svg class="ic" aria-hidden="true"><use href="icons.svg#i-select"/></svg></button>
+        <button type="button" class="tool-btn hide-xs" data-tool="hand" :aria-pressed="S.tool === 'hand' ? 'true' : 'false'" @click="setTool('hand')" :aria-label="t('tool.hand')" :title="t('tool.hand') + ' (H)'"><svg class="ic" aria-hidden="true"><use href="icons.svg#i-hand"/></svg></button>
+        <button type="button" class="tool-btn" data-tool="pen" :aria-pressed="S.tool === 'pen' ? 'true' : 'false'" @click="setTool('pen')" :aria-label="t('tool.pen')" :title="t('tool.pen') + ' (P)'"><svg class="ic" aria-hidden="true"><use href="icons.svg#i-pen"/></svg></button>
+        <button type="button" class="tool-btn" data-tool="hl" :aria-pressed="S.tool === 'hl' ? 'true' : 'false'" @click="setTool('hl')" :aria-label="t('tool.hl')" :title="t('tool.hl') + ' (M)'"><svg class="ic" aria-hidden="true"><use href="icons.svg#i-highlighter"/></svg></button>
+        <button type="button" class="tool-btn" data-tool="eraser" :aria-pressed="S.tool === 'eraser' ? 'true' : 'false'" @click="setTool('eraser')" :aria-label="t('tool.eraser')" :title="t('tool.eraser') + ' (E)'"><svg class="ic" aria-hidden="true"><use href="icons.svg#i-eraser"/></svg></button>
+        <button type="button" class="tool-btn" data-tool="shapes" :aria-pressed="['rect', 'ellipse', 'line', 'arrow'].includes(S.tool) ? 'true' : 'false'" :aria-expanded="S.shapes ? 'true' : 'false'" @click="S.shapes = !S.shapes" :aria-label="t('tool.shapes')" :title="t('tool.shapes')"><svg class="ic" aria-hidden="true"><use :href="'icons.svg#i-' + (['rect', 'ellipse', 'line', 'arrow'].includes(S.tool) ? S.tool : 'rect')"/></svg></button>
+        <button type="button" class="tool-btn" data-tool="text" :aria-pressed="S.tool === 'text' ? 'true' : 'false'" @click="setTool('text')" :aria-label="t('tool.text')" :title="t('tool.text') + ' (T)'"><svg class="ic" aria-hidden="true"><use href="icons.svg#i-text"/></svg></button>
+        <button type="button" class="tool-btn" data-tool="note" :aria-pressed="S.tool === 'note' ? 'true' : 'false'" @click="setTool('note')" :aria-label="t('tool.note')" :title="t('tool.note') + ' (N)'"><svg class="ic" aria-hidden="true"><use href="icons.svg#i-note"/></svg></button>
+        <button type="button" class="tool-btn" data-tool="image" @click="pickImage()" :aria-label="t('tool.image')" :title="t('tool.image') + ' (I)'"><svg class="ic" aria-hidden="true"><use href="icons.svg#i-image"/></svg></button>
+      </nav>
+    </div>
+  </main>
+</div>
+
+<!-- Invite: six words and a QR code, then the confirmation words typed back. -->
+<dialog data-dlg="invite" id="invite-dialog" class="modal" aria-labelledby="invite-title">
+  <div class="modal-box pair-box">
+    <button type="button" class="modal-close" @click="closeDialog()" :aria-label="t('dlg.close')"></button>
+    <div v-show="S.pair.stage === 'starting' || S.pair.stage === ''" class="pair-wait">
+      <span class="spinner" aria-hidden="true"></span>
+      <p v-text="t('pair.starting')">Reaching the relays</p>
+    </div>
+    <div v-show="S.pair.stage === 'waiting'">
+      <h2 id="invite-title" class="pair-title" v-text="t('invite.title')">Invite friends</h2>
+      <p class="pair-sub" v-text="t('invite.sub')"></p>
+      <div class="invite-grid">
+        <ol class="word-tiles" id="invite-words" :data-words="S.pair.words.join(' ')">
+          <li v-for="(w, i) in S.pair.words" :key="i"><span class="n" v-text="i + 1"></span><span class="w" v-text="w"></span></li>
+        </ol>
+        <div class="qr-wrap">
+          <div class="qr" v-html="S.pair.qr"></div>
+          <p class="qr-cap" v-text="t('invite.qr')">Scan with a phone camera</p>
+        </div>
+      </div>
+      <p class="pair-meta"><span v-text="t('invite.expires', { left: S.pair.left })"></span><span aria-hidden="true"> &middot; </span><span v-text="t('pair.relays', { n: S.pair.relays, total: S.pair.relaysTotal })"></span></p>
+    </div>
+    <div v-show="S.pair.stage === 'connecting'" class="pair-wait">
+      <span class="spinner" aria-hidden="true"></span>
+      <p v-text="t('pair.connecting', { name: S.pair.peerName || t('people.friend') })"></p>
+    </div>
+    <div v-show="S.pair.stage === 'confirm'">
+      <h2 class="pair-title" v-text="t('confirm.title', { name: S.pair.peerName || t('people.friend') })">Check the words</h2>
+      <p class="pair-sub" v-text="t('confirm.sub')"></p>
+      <div id="confirm-words" v-ignore></div>
+      <p class="pair-error" v-show="S.pair.tries < 3" v-text="t('confirm.wrong', { n: S.pair.tries })"></p>
+      <div class="modal-actions"><button id="confirm-btn" type="button" class="btn btn-primary" @click="confirmTyped()"><svg class="ic" aria-hidden="true"><use href="icons.svg#i-shield"/></svg><span v-text="t('confirm.button')">Let them in</span></button></div>
+    </div>
+    <div v-show="S.pair.stage === 'done'" class="pair-wait">
+      <svg class="ic ic-xl ok" aria-hidden="true"><use href="icons.svg#i-check"/></svg>
+      <p v-text="t('pair.done', { name: S.pair.peerName || t('people.friend') })"></p>
+    </div>
+    <div v-show="S.pair.stage === 'failed'" class="pair-wait">
+      <p class="pair-error" v-text="t('fail.' + S.pair.reason)"></p>
+      <div class="modal-actions"><button type="button" class="btn btn-primary" @click="invite()" v-text="t('fail.again')">Try again</button></div>
+    </div>
+  </div>
+</dialog>
+
+<!-- Join: type the six words, then read six words back. -->
+<dialog data-dlg="join" id="join-dialog" class="modal" aria-labelledby="join-title">
+  <div class="modal-box pair-box">
+    <button type="button" class="modal-close" @click="closeDialog()" :aria-label="t('dlg.close')"></button>
+    <div v-show="S.pair.stage === 'type'">
+      <h2 id="join-title" class="pair-title" v-text="t('join.title')">Join a board</h2>
+      <p class="pair-sub" v-text="t('join.sub')"></p>
+      <div id="join-words" v-ignore></div>
+      <div class="modal-actions"><button id="join-go" type="button" class="btn btn-primary" @click="startJoin()" v-text="t('join.button')">Join</button></div>
+    </div>
+    <div v-show="S.pair.stage === 'finding' || S.pair.stage === 'connecting'" class="pair-wait">
+      <span class="spinner" aria-hidden="true"></span>
+      <p v-text="S.pair.stage === 'finding' ? t('join.finding') : t('pair.connecting', { name: S.pair.peerName || t('people.friend') })"></p>
+      <p class="pair-meta" v-text="t('pair.relays', { n: S.pair.relays, total: S.pair.relaysTotal })"></p>
+    </div>
+    <div v-show="S.pair.stage === 'show'">
+      <h2 class="pair-title" v-text="t('show.title', { name: S.pair.peerName || t('people.friend') })">Read these words</h2>
+      <p class="pair-sub" v-text="t('show.sub')"></p>
+      <ol class="word-tiles word-tiles-big" id="show-words" :data-words="S.pair.expected.join(' ')">
+        <li v-for="(w, i) in S.pair.expected" :key="i"><span class="n" v-text="i + 1"></span><span class="w" v-text="w"></span></li>
+      </ol>
+    </div>
+    <div v-show="S.pair.stage === 'done'" class="pair-wait">
+      <svg class="ic ic-xl ok" aria-hidden="true"><use href="icons.svg#i-check"/></svg>
+      <p v-text="t('join.done')">You are in</p>
+    </div>
+    <div v-show="S.pair.stage === 'failed'" class="pair-wait">
+      <p class="pair-error" v-text="t('fail.' + S.pair.reason)"></p>
+      <div class="modal-actions"><button type="button" class="btn btn-primary" @click="openJoin()" v-text="t('fail.again')">Try again</button></div>
+    </div>
+  </div>
+</dialog>
+
+<!-- Boards saved in this browser, and exports. -->
+<dialog data-dlg="boards" id="boards-dialog" class="modal modal-lg" aria-labelledby="boards-title">
+  <div class="modal-box">
+    <button type="button" class="modal-close" @click="closeDialog()" :aria-label="t('dlg.close')"></button>
+    <div class="modal-header"><h2 id="boards-title" class="modal-title" v-text="t('boards.title')">Your boards</h2></div>
+    <p class="text-muted-foreground text-sm" v-text="t('boards.local')"></p>
+    <div class="export-row">
+      <span class="export-label" v-text="t('export.label', { name: S.boardName })"></span>
+      <button id="export-png" type="button" class="btn btn-outline btn-sm" @click="exportPng()"><svg class="ic" aria-hidden="true"><use href="icons.svg#i-download"/></svg>PNG</button>
+      <button id="export-svg" type="button" class="btn btn-outline btn-sm" @click="exportSvg()"><svg class="ic" aria-hidden="true"><use href="icons.svg#i-download"/></svg>SVG</button>
+      <button id="export-file" type="button" class="btn btn-outline btn-sm" @click="exportFile()"><svg class="ic" aria-hidden="true"><use href="icons.svg#i-file"/></svg><span v-text="t('export.file')">Board file</span></button>
+    </div>
+    <div class="boards-actions">
+      <button id="new-board" type="button" class="btn btn-primary btn-sm" @click="newBoard()"><svg class="ic" aria-hidden="true"><use href="icons.svg#i-plus"/></svg><span v-text="t('boards.new')">New board</span></button>
+      <button type="button" class="btn btn-ghost btn-sm" @click="pickBoardFile()"><svg class="ic" aria-hidden="true"><use href="icons.svg#i-upload"/></svg><span v-text="t('boards.import')">Open a board file</span></button>
+      <button type="button" class="btn btn-ghost btn-sm" v-show="S.connected" @click="leaveBoard()" v-text="t('people.leave')">Stop drawing together</button>
+    </div>
+    <ul class="board-list" id="board-list">
+      <li v-for="b in S.boards" :key="b.id" class="board-card" :class="{ 'is-current': b.current }">
+        <button type="button" class="board-open" @click="openFromList(b.id)">
+          <span class="board-thumb"><img v-if="b.thumb" :src="b.thumb" alt=""></span>
+          <span class="board-meta"><span class="board-title" v-text="b.name"></span><span class="board-when" v-text="b.current ? t('boards.open') : b.when"></span></span>
+        </button>
+        <button type="button" class="btn btn-ghost btn-xs board-del" :class="{ 'is-sure': S.sure === b.id }" @click="deleteBoard(b.id)" v-text="S.sure === b.id ? t('boards.sure') : t('boards.delete')">Delete</button>
+      </li>
+    </ul>
+  </div>
+</dialog>
+
+<!-- Settings: name, color, language, theme, TURN and the connection check. -->
+<dialog data-dlg="settings" id="settings-dialog" class="modal" aria-labelledby="settings-title">
+  <div class="modal-box">
+    <button type="button" class="modal-close" @click="closeDialog()" :aria-label="t('dlg.close')"></button>
+    <div class="modal-header"><h2 id="settings-title" class="modal-title" v-text="t('settings.title')">Settings</h2></div>
+    <div class="settings">
+      <label class="field"><span class="field-label" v-text="t('settings.name')">Your name</span><input id="name-input" class="input" v-model="S.name" @change="saveProfile()" maxlength="32"></label>
+      <div class="field"><span class="field-label" v-text="t('settings.color')">Your cursor color</span>
+        <div class="swatches"><button v-for="c in PEOPLE_COLORS" :key="c" type="button" class="swatch" role="radio" :aria-checked="S.me === c ? 'true' : 'false'" :aria-label="c" :style="{ '--c': c }" @click="S.me = c; saveProfile()"></button></div>
+      </div>
+      <div class="field"><span class="field-label" v-text="t('settings.lang')">Language</span>
+        <div class="segmented" role="radiogroup"><label class="segmented-item"><input type="radio" name="lang" :checked="S.lang === 'en'" @change="setLang('en')"> English</label><label class="segmented-item"><input type="radio" name="lang" :checked="S.lang === 'pt'" @change="setLang('pt')"> Português</label></div>
+      </div>
+      <div class="field"><span class="field-label" v-text="t('settings.theme')">Theme</span>
+        <div class="segmented" role="radiogroup"><label class="segmented-item"><input type="radio" name="theme" :checked="S.theme === 'dark'" @change="setTheme('dark')"> <span v-text="t('settings.dark')">Night slate</span></label><label class="segmented-item"><input type="radio" name="theme" :checked="S.theme === 'light'" @change="setTheme('light')"> <span v-text="t('settings.light')">Calm light</span></label></div>
+      </div>
+      <div class="field"><span class="field-label" v-text="t('settings.check')">Connection check</span>
+        <ul class="stun-list"><li v-for="r in S.stun.results" :key="r.host"><span class="dot" :class="{ ok: r.ok }"></span><span v-text="r.host"></span><span class="ms" v-text="r.ok ? r.ms + ' ms' : t('settings.noAnswer')"></span></li></ul>
+        <p class="text-sm text-muted-foreground" v-show="!S.stun.checked" v-text="t('settings.checking')"></p>
+        <p class="text-sm" :class="S.stun.ok ? 'text-muted-foreground' : 'text-warning'" v-show="S.stun.checked" v-text="S.stun.ok ? t('settings.stunOk') : t('settings.stunNone')"></p>
+        <button type="button" class="btn btn-ghost btn-xs" @click="checkStun()" v-text="t('settings.recheck')">Check again</button>
+      </div>
+      <details class="field turn">
+        <summary v-text="t('settings.turn')">Your own TURN server (optional)</summary>
+        <p class="text-sm text-muted-foreground" v-text="t('settings.turnWhy')"></p>
+        <input class="input input-sm" v-model="S.turnUrl" placeholder="turn:turn.example.com:3478" aria-label="TURN">
+        <div class="turn-row"><input class="input input-sm" v-model="S.turnUser" :placeholder="t('settings.user')" :aria-label="t('settings.user')"><input class="input input-sm" type="password" v-model="S.turnPass" :placeholder="t('settings.pass')" :aria-label="t('settings.pass')"></div>
+        <p class="text-sm text-danger" v-show="S.turnError" v-text="S.turnError"></p>
+        <button type="button" class="btn btn-outline btn-xs" @click="saveTurn()" v-text="t('settings.save')">Save</button>
+      </details>
+      <button type="button" class="btn btn-outline btn-sm" v-show="S.canInstall" @click="install()"><svg class="ic" aria-hidden="true"><use href="icons.svg#i-install"/></svg><span v-text="t('settings.install')">Install the app</span></button>
+      <details class="field limits"><summary v-text="t('limits.title')">What to know</summary><ul><li v-text="t('limits.1')"></li><li v-text="t('limits.2')"></li><li v-text="t('limits.3')"></li><li v-text="t('limits.4')"></li><li v-text="t('limits.5')"></li></ul></details>
+    </div>
+  </div>
+</dialog>
+
+<!-- First visit. -->
+<dialog data-dlg="welcome" id="welcome-dialog" class="modal" aria-labelledby="welcome-title">
+  <div class="modal-box welcome">
+    <img class="welcome-art" src="../assets/mascot-dark.svg" width="360" height="260" alt="">
+    <h2 id="welcome-title" class="pair-title" v-text="t('welcome.title')">Draw together, live</h2>
+    <ul class="welcome-points">
+      <li><svg class="ic" aria-hidden="true"><use href="icons.svg#i-pen"/></svg><span v-text="t('welcome.1')"></span></li>
+      <li><svg class="ic" aria-hidden="true"><use href="icons.svg#i-words"/></svg><span v-text="t('welcome.2')"></span></li>
+      <li><svg class="ic" aria-hidden="true"><use href="icons.svg#i-lock"/></svg><span v-text="t('welcome.3')"></span></li>
+    </ul>
+    <label class="field"><span class="field-label" v-text="t('welcome.name')">What should friends call you?</span><input id="welcome-name" class="input" v-model="S.name" maxlength="32" @keydown.enter="welcomeDone()" :placeholder="t('welcome.placeholder')"></label>
+    <div class="modal-actions"><button id="welcome-go" type="button" class="btn btn-primary btn-block" @click="welcomeDone()" v-text="t('welcome.go')">Start drawing</button></div>
+  </div>
+</dialog>
+
+<div class="toast toast-bottom toast-center toasts" aria-live="polite">
+  <div v-for="m in S.toasts" :key="m.id" class="toast-item" :class="'is-' + m.kind" role="status" v-text="m.text"></div>
+</div>
+<input type="file" id="image-file" accept="image/*" multiple hidden>
+<input type="file" id="board-file" accept=".doodleduo,application/json" hidden>
+</body>
+</html>
