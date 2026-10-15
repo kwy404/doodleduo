@@ -1,0 +1,50 @@
+{
+  "name": "doodleduo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "An infinite whiteboard you draw on together with friends at the same time, peer to peer in the browser.",
+  "keywords": [
+    "whiteboard",
+    "drawing",
+    "collaboration",
+    "peer to peer",
+    "webrtc",
+    "crdt"
+  ],
+  "homepage": "https://kwy404.github.io/doodleduo/",
+  "bugs": {
+    "url": "https://github.com/kwy404/doodleduo/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kwy404/doodleduo.git"
+  },
+  "license": "MIT",
+  "author": "Alexandre Kohler (https://github.com/kwy404)",
+  "type": "module",
+  "engines": {
+    "node": ">=18.18"
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "rules": "node scripts/check-rules.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "core": "node scripts/sync-core.mjs",
+    "core:check": "node scripts/sync-core.mjs --check",
+    "art": "node scripts/site/art.mjs",
+    "links": "node scripts/check-links.mjs",
+    "e2e": "node test/app-e2e.mjs",
+    "shots": "node scripts/shots.mjs",
+    "serve": "node scripts/serve.mjs"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "@scure/bip39": "^2.4.0",
+    "eslint": "^9.39.5",
+    "globals": "^16.5.0",
+    "jsqr": "^1.4.0",
+    "playwright-core": "1.62.1",
+    "vitest": "^3.2.7"
+  }
+}
