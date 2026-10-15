@@ -105,12 +105,12 @@ ${finish(W, H, pal, p)}</g>`;
 
 // ---------- Landing hero ----------
 
-export function hero() {
+export function hero(mode = 'dark') {
   const p = 'h';
   const W = 900;
   const H = 640;
   const body = `<defs>${sharedDefs(p)}</defs>
-<ellipse cx="450" cy="560" rx="380" ry="40" fill="#000" opacity=".55" filter="url(#${p}-soft)"/>
+<ellipse cx="450" cy="560" rx="380" ry="40" fill="${mode === 'dark' ? '#000' : '#5f646b'}" opacity="${mode === 'dark' ? 0.55 : 0.16}" filter="url(#${p}-soft)"/>
 ${duck('mabel', { x: 170, y: 290, s: 1.35, flip: true, defs: p })}
 ${duck('otto', { x: 470, y: 316, s: 1.24, flip: true, defs: p })}`;
   return svg(W, H, body, { title: 'Mabel and Otto at the slate' });

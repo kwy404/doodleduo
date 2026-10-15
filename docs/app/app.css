@@ -33,9 +33,10 @@
   --shadow: 0 10px 34px rgba(30, 32, 36, .12);
 }
 :root[data-theme="dark"] { --background: #0c0e11; --surface: #14181d; }
+:root[data-theme="light"] { --background: #f2f1ec; --surface: #fbfaf7; }
 
 html, body { height: 100%; }
-body { margin: 0; overflow: hidden; font-family: var(--font-ui); background: var(--slate); overscroll-behavior: none; }
+body { margin: 0; overflow: hidden; font-family: var(--font-ui); background: var(--slate); color: var(--chalk); overscroll-behavior: none; }
 .ic { width: 20px; height: 20px; flex: none; }
 .ic-xl { width: 44px; height: 44px; }
 .hide-sm, .hide-xs { }

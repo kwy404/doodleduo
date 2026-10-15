@@ -3,7 +3,7 @@
 <filter id="h-glow" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur in="SourceGraphic" stdDeviation="5" result="b"/><feColorMatrix in="b" type="matrix" values="1 0 0 0 0 0 1 0 0 0 0 0 1 0 0 0 0 0 .75 0" result="g"/><feMerge><feMergeNode in="g"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
 <filter id="h-chalk" x="-10%" y="-10%" width="120%" height="120%"><feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="2" seed="4" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="2.4" result="d"/><feTurbulence type="fractalNoise" baseFrequency="2.2" numOctaves="1" seed="9" result="m"/><feColorMatrix in="m" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 -2.2 1.9" result="holes"/><feComposite in="d" in2="holes" operator="in"/></filter>
 <filter id="h-grain" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency=".85" numOctaves="2" seed="11" stitchTiles="stitch"/><feColorMatrix values="0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 1.6 -.6"/></filter></defs>
-<ellipse cx="450" cy="560" rx="380" ry="40" fill="#000" opacity=".55" filter="url(#h-soft)"/>
+<ellipse cx="450" cy="560" rx="380" ry="40" fill="#000" opacity="0.55" filter="url(#h-soft)"/>
 <g transform="translate(467 290) scale(-1.35 1.35)"><defs>
 <radialGradient id="dk69-b" cx=".38" cy=".3" r=".8"><stop offset="0" stop-color="#efe3b8"/><stop offset=".45" stop-color="#d9c993"/><stop offset=".85" stop-color="#a8975f"/><stop offset="1" stop-color="#7b6c40"/></radialGradient>
 <radialGradient id="dk69-h" cx=".4" cy=".32" r=".75"><stop offset="0" stop-color="#efe3b8"/><stop offset=".5" stop-color="#d9c993"/><stop offset=".9" stop-color="#a8975f"/><stop offset="1" stop-color="#7b6c40"/></radialGradient>

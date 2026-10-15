@@ -250,7 +250,7 @@ export function build(root = '.') {
   }
   out.push(['docs/favicon.svg', head('dark', { tile: true })], ['docs/app/icons/icon.svg', appIcon()], ['docs/app/icons/maskable.svg', appIcon({ maskable: true })]);
   out.push(['docs/assets/icons.svg', iconSprite()], ['docs/app/icons.svg', iconSprite()]);
-  out.push(['assets/brand/character-sheet.svg', characterSheet()], ['docs/assets/hero.svg', hero()]);
+  out.push(['assets/brand/character-sheet.svg', characterSheet()], ['docs/assets/hero.svg', hero('dark')], ['docs/assets/hero-light.svg', hero('light')]);
   for (const [file, text] of out) write(join(root, file), text);
   return out.length;
 }
