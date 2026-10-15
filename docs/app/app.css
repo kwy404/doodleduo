@@ -64,6 +64,7 @@ body { margin: 0; overflow: hidden; font-family: var(--font-ui); background: var
 .board-name { background: transparent; border: 1px solid transparent; border-radius: 10px; color: var(--chalk); font: 600 15px/1.2 var(--font-ui); padding: 8px 10px; width: clamp(110px, 22vw, 260px); min-width: 0; text-overflow: ellipsis; }
 .board-name:hover { border-color: var(--hair); }
 .board-name:focus { outline: none; border-color: var(--accent); background: var(--accent-soft); }
+.inv-short { display: none; }
 .invite-btn { min-height: 40px; padding-inline: 16px; font-weight: 600; letter-spacing: -.01em; }
 
 .people { display: flex; padding-inline: 4px; }
@@ -147,6 +148,7 @@ body { margin: 0; overflow: hidden; font-family: var(--font-ui); background: var
 .word-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .word-cell { position: relative; display: flex; align-items: center; }
 .word-n { position: absolute; left: 10px; font: 600 11px/1 var(--font-ui); color: var(--muted-ink); pointer-events: none; }
+.word-field::-webkit-calendar-picker-indicator { display: none !important; }
 .word-field { padding-left: 26px; font-family: var(--font-hand); font-size: 18px; width: 100%; }
 .word-cell.is-ok .word-field { border-color: rgba(169, 191, 159, .55); }
 .word-cell.is-bad .word-field { border-color: rgba(214, 167, 162, .7); }
@@ -203,13 +205,20 @@ dialog.modal::backdrop { background: rgba(5, 6, 8, .62); backdrop-filter: blur(3
   .invite-grid { grid-template-columns: 1fr; justify-items: center; }
   .word-tiles { width: 100%; }
   .word-grid { grid-template-columns: repeat(2, 1fr); row-gap: 14px; }
-  .corner-start { bottom: calc(max(14px, env(safe-area-inset-bottom)) + 66px); }
-  .corner-end { bottom: calc(max(14px, env(safe-area-inset-bottom)) + 66px); }
+  .corner { bottom: auto; top: calc(max(12px, env(safe-area-inset-top)) + 58px); }
+  .corner-start { left: 8px; }
+  .corner-end { right: 8px; }
+  .corner .tool { width: 38px; height: 38px; }
+  .zoom-label { min-width: 50px; padding-inline: 4px; }
   .toasts { bottom: calc(max(14px, env(safe-area-inset-bottom)) + 200px); }
 }
 @media (max-width: 520px) {
   .hide-xs { display: none; }
-  .topbar { left: 8px; right: 8px; }
+  .topbar { left: 8px; right: 8px; gap: 6px; }
+  .topbar-side { padding: 4px; gap: 2px; }
+  .brand { display: none; }
+  .board-name { width: clamp(70px, 24vw, 120px); padding-inline: 6px; }
+  .top-boards, #join-btn { padding-inline: 8px; }
   .people .person:nth-child(n + 3) { display: none; }
   .live-badge { display: none; }
   .invite-btn { padding-inline: 12px; }
@@ -218,9 +227,12 @@ dialog.modal::backdrop { background: rgba(5, 6, 8, .62); backdrop-filter: blur(3
   .toolbar { overflow-x: auto; scrollbar-width: none; }
   .stylebar { flex-wrap: wrap; justify-content: center; }
 }
-@media (max-width: 380px) {
+@media (max-width: 400px) {
   .tool-btn { width: 37px; }
-  .brand { display: none; }
+  .inv-long { display: none; }
+  .inv-short { display: inline; }
+  .people { display: none; }
+  .invite-btn { padding-inline: 10px; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }

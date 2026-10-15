@@ -120,6 +120,36 @@ try {
   await ana.page.waitForFunction(() => window.doodleduo.view().list.some((e) => e.type === 'image'), null, { timeout: 15000 });
   log('Ana drew a stroke, three shapes and a picture alone');
 
+  // Two fingers: spread them apart to zoom in, then move both to pan.
+  const pinch = await run(ana, async () => {
+    const c = document.getElementById('board');
+    const r = c.getBoundingClientRect();
+    const fire = (type, id, x, y) => c.dispatchEvent(new PointerEvent(type, { pointerId: id, pointerType: 'touch', isPrimary: id === 11, clientX: r.left + x, clientY: r.top + y, bubbles: true }));
+    const view = window.doodleduo.view();
+    const z0 = view.cam.z;
+    const count0 = view.list.length;
+    fire('pointerdown', 11, 400, 400);
+    fire('pointerdown', 12, 500, 400);
+    for (let i = 1; i <= 10; i++) {
+      fire('pointermove', 11, 400 - i * 10, 400);
+      fire('pointermove', 12, 500 + i * 10, 400);
+      await new Promise((r2) => setTimeout(r2, 16));
+    }
+    const z1 = view.cam.z;
+    const x1 = view.cam.x;
+    for (let i = 1; i <= 5; i++) {
+      fire('pointermove', 11, 300 + i * 20, 400);
+      fire('pointermove', 12, 600 + i * 20, 400);
+      await new Promise((r2) => setTimeout(r2, 16));
+    }
+    fire('pointerup', 11, 400, 400);
+    fire('pointerup', 12, 700, 400);
+    return { zoomed: z1 / z0, panned: view.cam.x !== x1, drew: view.list.length - count0 };
+  });
+  ok(pinch.zoomed > 2.5 && pinch.panned && pinch.drew === 0, `two fingers pinch zoom and pan without drawing (${JSON.stringify(pinch)})`);
+  await run(ana, () => window.doodleduo.view().fit());
+  log(`two fingers zoomed ${pinch.zoomed.toFixed(1)} times and panned, without drawing`);
+
   const words = await pair(ana, bia);
   log(`Bia joined with six words (${words.length}) and the confirmation words matched`);
   await bia.page.waitForFunction(() => window.doodleduo.S.people.length === 2, null, { timeout: 30000 });

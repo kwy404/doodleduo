@@ -396,7 +396,11 @@ export class Input {
   down(e) {
     const view = this.app.view;
     if (e.pointerType === 'pen') this.penSeen = true;
-    this.canvas.setPointerCapture?.(e.pointerId);
+    try {
+      this.canvas.setPointerCapture(e.pointerId);
+    } catch {
+      // a synthetic or already released pointer
+    }
     const [sx, sy] = this.local(e);
     this.pointers.set(e.pointerId, { x: sx, y: sy, type: e.pointerType });
     const touches = [...this.pointers.values()].filter((p) => p.type === 'touch');

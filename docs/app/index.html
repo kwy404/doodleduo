@@ -33,7 +33,7 @@
       </div>
       <span class="badge badge-soft live-badge" v-show="S.connected"><span class="live-dot" aria-hidden="true"></span><span v-text="t('people.live', { n: S.people.length })"></span></span>
       <button id="join-btn" type="button" class="btn btn-ghost btn-sm" @click="openJoin()"><svg class="ic" aria-hidden="true"><use href="icons.svg#i-words"/></svg><span class="hide-sm" v-text="t('top.join')">Join</span></button>
-      <button id="invite-btn" type="button" class="btn btn-primary invite-btn" @click="invite()"><svg class="ic" aria-hidden="true"><use href="icons.svg#i-invite"/></svg><span v-text="t('top.invite')">Invite friends</span></button>
+      <button id="invite-btn" type="button" class="btn btn-primary invite-btn" @click="invite()"><svg class="ic" aria-hidden="true"><use href="icons.svg#i-invite"/></svg><span class="inv-long" v-text="t('top.invite')">Invite friends</span><span class="inv-short" v-text="t('top.inviteShort')">Invite</span></button>
       <button id="settings-btn" type="button" class="btn btn-ghost btn-square btn-sm" @click="openDialog('settings')" :aria-label="t('top.settings')" :title="t('top.settings')"><svg class="ic" aria-hidden="true"><use href="icons.svg#i-settings"/></svg></button>
     </div>
   </header>
