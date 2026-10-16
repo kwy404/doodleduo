@@ -40,6 +40,8 @@ Press **Invite friends** and send six words, a QR code or a link (all three carr
   </tr>
 </table>
 
+A right click, a long press or the Menu key (Shift+F10 too) opens one keyboard friendly menu: copy, paste, duplicate, delete, front and back, color, group and lock on shapes and strokes; paste, a sticky note, text and zoom to fit on the empty board; reply and react on chat messages; mute for me and go to their cursor on the people in the call.
+
 ## Talk while you draw
 
 <picture>

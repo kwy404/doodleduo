@@ -8,6 +8,7 @@ First release.
 - Smooth, pressure aware pen strokes, a highlighter, an eraser, rectangles, ellipses, lines, arrows, text and sticky notes.
 - Pictures by paste, drop or picker, compressed to WebP or JPEG and shared with everyone.
 - Select, move, resize, duplicate and bring to front. Undo and redo per person.
+- A context menu by right click, long press, the Menu key or Shift+F10, with submenus, arrow keys and type to jump: copy and paste, send to back, lock, color and group on elements; paste, sticky note, text and zoom to fit on the board; reply and react on messages; mute for me and go to a cursor on call members.
 - Chat with replies and reactions, a voice call with Strong noise suppression (browser filters plus a DSP AudioWorklet) and a mic test, camera bubbles next to each cursor and screen sharing. Mute, camera off and pickers for the microphone, camera and speaker that apply during a call.
 - Up to 5 people with live cursors and names, in a mesh that introduces newcomers and relays around blocked pairs.
 - A board CRDT: last writer wins fields with Lamport times, ordered stroke points, full state for late joiners.

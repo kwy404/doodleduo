@@ -20,6 +20,7 @@ Toque em **Convidar amigos** e mande seis palavras, um QR code ou um link (os tr
 - Conversa com respostas e reações, chamada de voz com supressão de ruído forte e teste de microfone, bolhas de câmera ao lado de cada cursor e compartilhamento de tela.
 - Desligar o microfone ou a câmera e escolher microfone, câmera e alto falante nas configurações, mesmo durante a chamada.
 - Selecionar, mover, redimensionar e duplicar. Desfazer e refazer por pessoa.
+- Menu de contexto com o botão direito, segurando o dedo ou com a tecla Menu (ou Shift+F10): copiar, colar, duplicar, apagar, frente e fundo, cor, agrupar e travar; colar, nota, texto e mostrar tudo no quadro vazio; responder e reagir nas mensagens; silenciar para mim nas pessoas da chamada.
 - Edições que se juntam: um CRDT mantém todas as cópias do quadro iguais.
 - Quadros salvos no IndexedDB. Exporte PNG, SVG ou um arquivo do quadro.
 - Mover com dois dedos e pinçar para zoom no celular. Instalável (PWA). Português e inglês.
