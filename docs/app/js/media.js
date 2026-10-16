@@ -27,6 +27,7 @@ export class MediaManager extends Emitter {
     this.ctx = null;
     this.meters = new Map();
     this.speaking = new Set();
+    this.mutedForMe = new Set(); // people I silenced on this device only
     this.lastLoud = new Map();
     this.sink = document.createElement('div');
     this.sink.hidden = true;
@@ -315,6 +316,19 @@ export class MediaManager extends Emitter {
     await el.setSinkId(this.settings.outId || '').catch(() => {});
   }
 
+  /** Whether I silenced this person on my device. */
+  isMutedForMe(peerId) {
+    return this.mutedForMe.has(peerId);
+  }
+
+  /** Silences one person on this device only; they and everyone else still hear each other. */
+  setMutedForMe(peerId, muted) {
+    if (muted) this.mutedForMe.add(peerId);
+    else this.mutedForMe.delete(peerId);
+    for (const el of this.remote.get(peerId)?.audio.values() || []) el.muted = muted;
+    this.emit('change');
+  }
+
   async toggleScreen() {
     if (!this.inCall) await this.join();
     if (this.screen) {
@@ -409,6 +423,7 @@ export class MediaManager extends Emitter {
     const el = document.createElement('audio');
     el.autoplay = true;
     el.srcObject = stream;
+    el.muted = this.mutedForMe.has(peerId);
     this.sink.append(el);
     this._sink(el);
     el.play().catch(() => this.emit('error', 'autoplay'));

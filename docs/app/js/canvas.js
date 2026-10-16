@@ -347,6 +347,16 @@ export class Gesture {
   }
 }
 
+/** The elements people can pick: locked ones stay put until someone unlocks them. */
+const free = (list) => list.filter((e) => !e.lock);
+
+/** Every element in the same group as el (just el when it has none). */
+export function groupOf(list, el) {
+  return el.grp ? list.filter((e) => e.grp === el.grp && !e.lock) : [el];
+}
+
+const LONG_PRESS_MS = 550;
+
 /**
  * Pointer input for every tool. app: { board, history, view, send(op), newId(), tool(),
  * style(), editText(el, isNew), changedHistory(), cursor(x, y), select(ids) }.
@@ -370,7 +380,53 @@ export class Input {
     });
     canvas.addEventListener('wheel', (e) => this.wheel(e), { passive: false });
     canvas.addEventListener('dblclick', (e) => this.dblclick(e));
-    canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+    canvas.addEventListener('contextmenu', (e) => this.contextmenu(e));
+    this.panned = 0; // how far the last right button pan moved, in pixels
+    this.press = null; // a touch that may become a long press
+    this.touchMenuAt = 0;
+  }
+
+  /** A right click that did not drag, or the browser's own long press: the context menu. */
+  contextmenu(e) {
+    e.preventDefault();
+    // A touch screen's own long press: same as ours, which also drops what the finger started.
+    if (this.press) return this.longPress();
+    const touch = e.pointerType === 'touch' || e.sourceCapabilities?.firesTouchEvents;
+    if (this.panned > 5 || (touch && performance.now() - this.touchMenuAt < 800)) return;
+    if (this.g?.kind === 'pan') {
+      this.g = null;
+      this.canvas.classList.remove('is-panning');
+    }
+    this.openMenu(e.clientX, e.clientY);
+  }
+
+  openMenu(cx, cy) {
+    const r = this.canvas.getBoundingClientRect();
+    this.app.contextMenu?.(cx - r.left, cy - r.top, cx, cy);
+  }
+
+  /** A finger held still: drop what it started and open the menu where it rests. */
+  longPress() {
+    const p = this.press;
+    this.press = null;
+    if (!p) return;
+    clearTimeout(p.timer);
+    const g = this.g;
+    if (g?.gesture && (g.kind === 'stroke' || g.kind === 'shape')) g.gesture.cancel();
+    else if (g?.gesture) g.gesture.commit();
+    if (g?.kind === 'marquee') this.app.view.marquee = null;
+    this.g = null;
+    this.pointers.clear();
+    this.app.view.dirty();
+    navigator.vibrate?.(12);
+    this.touchMenuAt = performance.now();
+    this.openMenu(p.cx, p.cy);
+  }
+
+  cancelPress() {
+    if (!this.press) return;
+    clearTimeout(this.press.timer);
+    this.press = null;
   }
 
   local(e) {
@@ -389,7 +445,7 @@ export class Input {
   dblclick(e) {
     const [sx, sy] = this.local(e);
     const [bx, by] = this.app.view.toBoard(sx, sy);
-    const el = topAt(this.app.view.list, bx, by, 6 / this.app.view.cam.z);
+    const el = topAt(free(this.app.view.list), bx, by, 6 / this.app.view.cam.z);
     if (el && (el.type === 'text' || el.type === 'note')) this.app.editText(el, false);
   }
 
@@ -404,6 +460,8 @@ export class Input {
     const [sx, sy] = this.local(e);
     this.pointers.set(e.pointerId, { x: sx, y: sy, type: e.pointerType });
     const touches = [...this.pointers.values()].filter((p) => p.type === 'touch');
+    this.cancelPress();
+    if (touches.length === 1 && e.pointerType === 'touch') this.press = { x: sx, y: sy, cx: e.clientX, cy: e.clientY, timer: setTimeout(() => this.longPress(), LONG_PRESS_MS) };
     if (touches.length >= 2) {
       // Second finger: whatever the first one started becomes a pinch.
       if (this.g?.gesture && this.g.kind === 'stroke') this.g.gesture.cancel();
@@ -416,6 +474,7 @@ export class Input {
     const tool = this.app.tool();
     const pan = e.button === 1 || e.button === 2 || this.space || tool === 'hand' || (e.pointerType === 'touch' && this.penSeen);
     if (pan) {
+      this.panned = 0;
       this.g = { kind: 'pan', last: [sx, sy] };
       this.canvas.classList.add('is-panning');
       return;
@@ -446,11 +505,11 @@ export class Input {
       this.g = { kind: 'shape', id, tool, gesture, start: [bx, by] };
       this.app.select([]);
     } else if (tool === 'text') {
-      const el = topAt(view.list, bx, by, 4 / z);
+      const el = topAt(free(view.list), bx, by, 4 / z);
       if (el?.type === 'text' || el?.type === 'note') this.app.editText(el, false);
       else this.app.editText({ type: 'text', x: bx, y: by - (style.fs || 28) * 0.6, fs: Math.round((28 / z) * 10) / 10, color: style.color, text: '' }, true);
     } else if (tool === 'note') {
-      const el = topAt(view.list, bx, by, 4 / z);
+      const el = topAt(free(view.list), bx, by, 4 / z);
       if (el?.type === 'note') return this.app.editText(el, false);
       const w = 200 / Math.max(z, 0.5);
       this.app.editText({ type: 'note', x: bx - w / 2, y: by - w / 2, w, h: w, color: style.note, fs: NOTE_FS / Math.max(z, 0.5), text: '' }, true);
@@ -473,12 +532,13 @@ export class Input {
         return;
       }
     }
-    const el = topAt(view.list, bx, by, 6 / view.cam.z);
+    const el = topAt(free(view.list), bx, by, 6 / view.cam.z);
     if (el) {
       if (shift) {
         const next = new Set(view.selection);
-        if (next.has(el.id)) next.delete(el.id);
-        else next.add(el.id);
+        const members = groupOf(view.list, el);
+        const on = !next.has(el.id);
+        for (const m of members) on ? next.add(m.id) : next.delete(m.id);
         this.app.select([...next]);
       } else if (!view.selection.has(el.id)) this.app.select([el.id]);
       this.g = { kind: 'move', gesture: new Gesture(this.app), start: [bx, by], snap: view.selected().map((x) => ({ ...x })), moved: false };
@@ -499,6 +559,7 @@ export class Input {
       ptr.x = sx;
       ptr.y = sy;
     }
+    if (this.press && Math.hypot(sx - this.press.x, sy - this.press.y) > 10) this.cancelPress();
     if (this.app.tool() === 'eraser') {
       view.eraser = { x: sx, y: sy, r: 12 };
       if (!this.g) view.dirty();
@@ -517,6 +578,7 @@ export class Input {
       view.cam = { z, x: bx0 - mid[0] / z, y: by0 - mid[1] / z };
       view.dirty(true);
     } else if (g.kind === 'pan') {
+      this.panned += Math.hypot(sx - g.last[0], sy - g.last[1]);
       view.pan(sx - g.last[0], sy - g.last[1]);
       g.last = [sx, sy];
     } else if (g.kind === 'stroke') {
@@ -574,7 +636,7 @@ export class Input {
       view.marquee.w = bx - view.marquee.x;
       view.marquee.h = by - view.marquee.y;
       const ids = new Set(g.base);
-      for (const el of view.list) if (overlaps(el, view.marquee)) ids.add(el.id);
+      for (const el of view.list) if (!el.lock && overlaps(el, view.marquee)) ids.add(el.id);
       this.app.select([...ids]);
       view.dirty();
     }
@@ -584,7 +646,7 @@ export class Input {
     const g = this.g;
     const r = 12 / this.app.view.cam.z;
     for (const el of this.app.view.list) {
-      if (g.gone.has(el.id)) continue;
+      if (g.gone.has(el.id) || el.lock) continue;
       if (eraserTouches(el, ax, ay, bx, by, r)) {
         g.gone.add(el.id);
         g.gesture.change(el.id, { del: true });
@@ -594,6 +656,7 @@ export class Input {
 
   up(e, cancelled = false) {
     this.pointers.delete(e.pointerId);
+    this.cancelPress();
     const g = this.g;
     this.canvas.classList.remove('is-panning');
     if (!g) return;

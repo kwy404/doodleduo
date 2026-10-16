@@ -1,6 +1,6 @@
-// QA: screenshots of the landing page, the app, its invite and its settings at 1860x930,
-// 1440x900 and 375x812, in the dark and the light theme, served under /doodleduo/ like GitHub
-// Pages. Fails on any console error or failed request. Output goes to tmp/shots/.
+// QA: screenshots of the landing page, the app, its invite, its menu and its settings at
+// 1860x930, 1440x900 and 375x812, in the dark and the light theme, served under /doodleduo/ like
+// GitHub Pages. Fails on any console error or failed request. Output goes to tmp/shots/.
 // node scripts/shots.mjs
 import { mkdirSync } from 'node:fs';
 import { serve } from './serve.mjs';
@@ -51,6 +51,11 @@ for (const theme of ['dark', 'light']) {
     await page.waitForFunction(() => window.doodleduo.S.pair.stage === 'waiting', null, { timeout: 90000 });
     await page.waitForTimeout(600);
     await page.screenshot({ path: `${out}/invite-${theme}-${w}.png` });
+    await page.keyboard.press('Escape');
+    await page.mouse.click(Math.round(w * 0.6), Math.round(h * 0.55), { button: 'right' });
+    await page.waitForSelector('.cmenu.is-open', { timeout: 5000 });
+    await page.waitForTimeout(250);
+    await page.screenshot({ path: `${out}/menu-${theme}-${w}.png` });
     await page.keyboard.press('Escape');
     await page.click('#settings-btn');
     await page.waitForTimeout(600);

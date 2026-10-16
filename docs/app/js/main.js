@@ -10,6 +10,8 @@ import { resolvePhrase, wordsFromLink } from '../core/words.js';
 import { STROKE_TYPES } from '../core/crdt.js';
 import { FILE_EXTENSION } from '../core/format.js';
 import { Gesture, Input, View } from './canvas.js';
+import { ContextMenu } from './menu.js';
+import { topAt, unionBounds } from '../core/geometry.js';
 import { Session, MAX_MEMBERS } from './session.js';
 import { MediaManager } from './media.js';
 import { REACTIONS } from '../core/chat.js';
@@ -182,11 +184,17 @@ const app = {
   },
   cursor: (x, y) => session.cursor(x, y),
   select(ids) {
-    view.selection = new Set(ids);
+    // Picking one element of a group picks the whole group.
+    const want = new Set(ids);
+    const groups = new Set();
+    for (const el of view.list) if (want.has(el.id) && el.grp) groups.add(el.grp);
+    if (groups.size) for (const el of view.list) if (groups.has(el.grp) && !el.lock) want.add(el.id);
+    view.selection = want;
     S.selected = view.selection.size;
     view.dirty();
   },
   editText: (el, isNew) => editText(el, isNew),
+  contextMenu: (sx, sy, cx, cy) => boardMenu(sx, sy, cx, cy),
   afterShape() {},
 };
 
@@ -947,10 +955,321 @@ async function install() {
   S.canInstall = false;
 }
 
+// ---------- Context menu ----------
+
+const menu = new ContextMenu();
+const CLIP_MARK = 'doodleduo/elements:';
+let clip = null; // the elements copied last, as plain fields
+const COLOR_NAMES = {
+  ink: 'ink',
+  '#9fb4c9': 'blue',
+  '#c9a3a6': 'rose',
+  '#a9bf9f': 'sage',
+  '#d8c08f': 'sand',
+  '#b5a8cc': 'lilac',
+  '#e6d9a8': 'butter',
+  '#c9d8b8': 'mint',
+  '#e6c3bd': 'peach',
+  '#bccfdd': 'sky',
+  '#d3c6df': 'lavender',
+};
+
+/** Plain copies of elements, strokes with their points, ready to paste anywhere. */
+function snapshot(els) {
+  return els.map((el) => {
+    const { id: _id, by: _by, del: _del, lock: _lock, ...fields } = el;
+    return JSON.parse(JSON.stringify(fields));
+  });
+}
+
+/** Adds copies of plain elements moved by (dx, dy), on top, with new ids and new group ids. */
+function placeCopies(els, dx, dy) {
+  const g = new Gesture(app);
+  const ids = [];
+  const groups = new Map();
+  let z = session.board.topZ();
+  for (const src of [...els].sort((a, b) => (a.z ?? 0) - (b.z ?? 0))) {
+    const id = session.newId();
+    const { points, ...fields } = src;
+    if (STROKE_TYPES.has(src.type)) {
+      const [sx, sy, tx, ty] = src.m || [1, 1, 0, 0];
+      fields.m = [sx, sy, tx + dx, ty + dy];
+    } else {
+      fields.x = (src.x || 0) + dx;
+      fields.y = (src.y || 0) + dy;
+    }
+    if (src.grp) {
+      if (!groups.has(src.grp)) groups.set(src.grp, `g${session.newId()}`);
+      fields.grp = groups.get(src.grp);
+    }
+    g.create(id, { ...fields, z: ++z });
+    if (points?.length) session.send(session.board.addPoints(id, points.flat()));
+    ids.push(id);
+  }
+  g.commit();
+  app.select(ids);
+  return ids;
+}
+
+function copySelection() {
+  const sel = view.selected();
+  if (!sel.length) return;
+  clip = snapshot(sel);
+  navigator.clipboard?.writeText(CLIP_MARK + JSON.stringify({ v: 1, els: clip })).catch(() => {});
+  toast(t('menu.copied', { n: sel.length }), 'success', 1800);
+}
+
+/** Pastes plain elements centered on a board point, or a step away from where they were. */
+function pasteElements(els, at = null) {
+  if (!els?.length) return;
+  setTool('select');
+  let dx = 24;
+  let dy = 24;
+  if (at) {
+    const b = unionBounds(els.map((e) => ({ ...e, id: e.id || 'x' })));
+    if (b) {
+      dx = at[0] - (b.x + b.w / 2);
+      dy = at[1] - (b.y + b.h / 2);
+    }
+  }
+  placeCopies(els, dx, dy);
+}
+
+function readClip(text) {
+  if (typeof text !== 'string' || !text.startsWith(CLIP_MARK)) return null;
+  try {
+    const data = JSON.parse(text.slice(CLIP_MARK.length));
+    return Array.isArray(data?.els) ? data.els.slice(0, 2000).filter((e) => e && typeof e === 'object' && typeof e.type === 'string') : null;
+  } catch {
+    return null;
+  }
+}
+
+async function pasteAt(at) {
+  let els = clip;
+  if (!els && navigator.clipboard?.readText) els = readClip(await navigator.clipboard.readText().catch(() => ''));
+  if (!els?.length) return toast(t('menu.nothing'), 'info', 2400);
+  pasteElements(els, at);
+}
+
+function sendToBack() {
+  const sel = view.selected().sort((a, b) => (a.z ?? 0) - (b.z ?? 0));
+  if (!sel.length) return;
+  const g = new Gesture(app);
+  let z = session.board.bottomZ() - sel.length;
+  for (const el of sel) g.change(el.id, { z: z++ });
+  g.commit();
+}
+
+function setLock(els, lock) {
+  if (!els.length) return;
+  const g = new Gesture(app);
+  for (const el of els) g.change(el.id, { lock });
+  g.commit();
+  app.select(lock ? [] : els.map((e) => e.id));
+  toast(t(lock ? 'menu.locked' : 'menu.unlocked', { n: els.length }), 'info', 2000);
+}
+
+function setGroup(on) {
+  const sel = view.selected();
+  if (on ? sel.length < 2 : !sel.some((e) => e.grp)) return;
+  const grp = on ? `g${session.newId()}` : '';
+  const g = new Gesture(app);
+  for (const el of sel) g.change(el.id, { grp });
+  g.commit();
+  app.select(sel.map((e) => e.id));
+}
+
+/** Colors an element can take: the note colors for notes only, else the inks. */
+function colorItems(els) {
+  const notes = els.every((e) => e.type === 'note');
+  const list = notes ? NOTES : INKS;
+  const current = els.length === 1 ? els[0].color : null;
+  return list.map((c) => ({
+    label: t(`color.${COLOR_NAMES[c] || 'ink'}`),
+    swatch: c === 'ink' ? THEMES[S.theme].ink : c,
+    checked: current === c,
+    action: () => (notes ? setNote(c) : setColor(c)),
+  }));
+}
+
+function elementItems(els) {
+  const locked = els.length === 1 && els[0].lock;
+  if (locked) {
+    return [
+      { id: 'unlock', label: t('menu.unlock'), icon: 'unlock', action: () => setLock(els, false) },
+      { separator: true },
+      { id: 'copy', label: t('menu.copy'), icon: 'copy', hint: 'Ctrl+C', action: () => ((clip = snapshot(els)), toast(t('menu.copied', { n: 1 }), 'success', 1800)) },
+    ];
+  }
+  const styled = els.filter((e) => e.type !== 'image');
+  const grouped = els.some((e) => e.grp);
+  return [
+    { id: 'copy', label: t('menu.copy'), icon: 'copy', hint: 'Ctrl+C', action: copySelection },
+    { id: 'duplicate', label: t('sel.duplicate'), icon: 'duplicate', hint: 'Ctrl+D', action: duplicate },
+    { id: 'delete', label: t('sel.delete'), icon: 'trash', hint: 'Del', danger: true, action: removeSelected },
+    { separator: true },
+    { id: 'front', label: t('sel.front'), icon: 'front', action: toFront },
+    { id: 'back', label: t('menu.back'), icon: 'back', action: sendToBack },
+    { separator: true },
+    { id: 'color', label: t('menu.color'), icon: 'palette', disabled: !styled.length, submenu: colorItems(styled.length ? styled : els) },
+    grouped ? { id: 'ungroup', label: t('menu.ungroup'), icon: 'ungroup', action: () => setGroup(false) } : { id: 'group', label: t('menu.group'), icon: 'group', hint: 'Ctrl+G', disabled: els.length < 2, action: () => setGroup(true) },
+    { id: 'lock', label: t('menu.lock'), icon: 'lock', action: () => setLock(view.selected(), true) },
+  ];
+}
+
+function boardItems(bx, by) {
+  const z = view.cam.z;
+  return [
+    { id: 'paste', label: t('menu.paste'), icon: 'paste', hint: 'Ctrl+V', disabled: !clip && !navigator.clipboard?.readText, action: () => pasteAt([bx, by]) },
+    { separator: true },
+    {
+      id: 'add-note',
+      label: t('menu.addNote'),
+      icon: 'note',
+      action: () => {
+        const w = 200 / Math.max(z, 0.5);
+        editText({ type: 'note', x: bx - w / 2, y: by - w / 2, w, h: w, color: S.note, fs: NOTE_FS / Math.max(z, 0.5), text: '' }, true);
+      },
+    },
+    { id: 'add-text', label: t('menu.addText'), icon: 'text', action: () => editText({ type: 'text', x: bx, y: by - 17 / z, fs: Math.round((28 / z) * 10) / 10, color: S.color, text: '' }, true) },
+    { separator: true },
+    { id: 'fit', label: t('zoom.fit'), icon: 'fit', hint: '1', disabled: !view.list.length, action: () => view.fit() },
+    { id: 'select-all', label: t('menu.selectAll'), icon: 'select', hint: 'Ctrl+A', disabled: !view.list.some((e) => !e.lock), action: selectAll },
+  ];
+}
+
+/** The canvas asked for a menu at a screen point (a right click or a long press). */
+function boardMenu(sx, sy, cx, cy, keyboard = false) {
+  if (S.dlg) return;
+  closeEditor(true);
+  const [bx, by] = view.toBoard(sx, sy);
+  const el = topAt(view.list, bx, by, 6 / view.cam.z);
+  if (el?.lock) {
+    app.select([]);
+    return menu.open(cx, cy, elementItems([el]), { label: t('menu.selection'), keyboard });
+  }
+  if (el) {
+    if (!view.selection.has(el.id)) {
+      setTool('select');
+      app.select([el.id]);
+    }
+    return menu.open(cx, cy, elementItems(view.selected()), { label: t('menu.selection'), keyboard });
+  }
+  menu.open(cx, cy, boardItems(bx, by), { label: t('menu.board'), keyboard });
+}
+
+function messageItems(m) {
+  const mine = session.profile.id;
+  return [
+    { id: 'reply', label: t('chat.reply'), icon: 'reply', action: () => replyTo(m.id) },
+    { id: 'react', label: t('menu.react'), icon: 'heart', submenu: REACTIONS.map((k) => ({ id: `react-${k}`, label: t(`react.${k}`), icon: k, checked: session.chat.reactionsOf(m.id, mine).some((r) => r.key === k && r.mine), action: () => react(m.id, k) })) },
+    { id: 'copy-text', label: t('menu.copyText'), icon: 'copy', action: () => navigator.clipboard?.writeText(m.text).then(() => toast(t('menu.copiedText'), 'success', 1600)).catch(() => {}) },
+  ];
+}
+
+function messageMenu(node, cx, cy, keyboard) {
+  const m = session.chat.get(node.dataset.id);
+  if (m) menu.open(cx, cy, messageItems(m), { label: t('menu.message', { name: m.name }), keyboard, returnFocus: node });
+}
+
+function personItems(p) {
+  if (p.me) {
+    if (!S.call.in) {
+      return [
+        { id: 'join-call', label: t('top.call'), icon: 'call', disabled: !S.connected, action: joinCall },
+        { id: 'settings', label: t('top.settings'), icon: 'settings', action: () => V.config.globals.openDialog('settings') },
+      ];
+    }
+    return [
+      { id: 'mute', label: S.call.muted ? t('call.unmute') : t('call.mute'), icon: S.call.muted ? 'mic' : 'mic-off', action: () => media.toggleMute() },
+      { id: 'camera', label: S.call.camera ? t('menu.cameraOff') : t('menu.cameraOn'), icon: S.call.camera ? 'camera-off' : 'camera', action: () => media.toggleCamera() },
+      { id: 'settings', label: t('top.settings'), icon: 'settings', action: () => V.config.globals.openDialog('settings') },
+      { separator: true },
+      { id: 'leave-call', label: t('call.leave'), icon: 'hangup', danger: true, action: () => media.leave() },
+    ];
+  }
+  const c = cursors.get(p.id);
+  const off = media.isMutedForMe(p.id);
+  return [
+    { id: 'goto', label: t('menu.goto', { name: p.name }), icon: 'locate', disabled: !c?.seen, action: () => goToCursor(p.id) },
+    { id: 'mute-for-me', label: off ? t('menu.unmuteFor') : t('menu.muteFor'), icon: off ? 'volume' : 'mute', disabled: !p.call, action: () => media.setMutedForMe(p.id, !off) },
+  ];
+}
+
+function personMenu(node, cx, cy, keyboard) {
+  const p = S.people.find((x) => x.id === node.dataset.peer);
+  if (p) menu.open(cx, cy, personItems(p), { label: p.name, keyboard, returnFocus: node });
+}
+
+function goToCursor(id) {
+  const c = cursors.get(id);
+  if (!c) return;
+  view.cam = { ...view.cam, x: c.x - view.w / 2 / view.cam.z, y: c.y - view.h / 2 / view.cam.z };
+  view.dirty(true);
+  for (const k of cursors.values()) placeCursor(k);
+}
+
+/** The Menu key or Shift+F10: a menu for what has the focus, or for the selection or the board. */
+function keyboardMenu(target) {
+  const msg = target.closest?.('#chat-list .msg');
+  const person = target.closest?.('.people .person');
+  const at = (node) => {
+    const r = node.getBoundingClientRect();
+    return [r.left + Math.min(24, r.width / 2), r.top + Math.min(24, r.height / 2)];
+  };
+  if (msg) return messageMenu(msg, ...at(msg), true);
+  if (person) return personMenu(person, ...at(person), true);
+  const rect = view.canvas.getBoundingClientRect();
+  const box = unionBounds(view.selected());
+  let [sx, sy] = [view.w / 2, view.h / 2];
+  if (box) [sx, sy] = view.toScreen(box.x + box.w / 2, box.y + box.h / 2);
+  boardMenu(sx, sy, rect.left + sx, rect.top + sy, true);
+}
+
+/** Right click, the browser's own long press, and our long press on touch for chat and people. */
+function wireMenus() {
+  const onContext = (e) => {
+    const msg = e.target.closest('#chat-list .msg');
+    const person = e.target.closest('.people .person');
+    if (!msg && !person) return;
+    if (e.target.closest('input, textarea')) return;
+    e.preventDefault();
+    if (menu.isOpen && performance.now() - menu.openedAt < 800) return;
+    if (msg) messageMenu(msg, e.clientX, e.clientY, false);
+    else personMenu(person, e.clientX, e.clientY, false);
+  };
+  document.addEventListener('contextmenu', onContext);
+  document.addEventListener('pointerdown', (e) => {
+    if (e.pointerType !== 'touch') return;
+    const node = e.target.closest('#chat-list .msg, .people .person');
+    if (!node) return;
+    const start = [e.clientX, e.clientY];
+    const timer = setTimeout(() => {
+      if (node.matches('.msg')) messageMenu(node, start[0], start[1], false);
+      else personMenu(node, start[0], start[1], false);
+    }, 550);
+    const stop = (ev) => {
+      if (ev.type === 'pointermove' && Math.hypot(ev.clientX - start[0], ev.clientY - start[1]) < 10) return;
+      clearTimeout(timer);
+      removeEventListener('pointermove', stop);
+      removeEventListener('pointerup', stop);
+      removeEventListener('pointercancel', stop);
+    };
+    addEventListener('pointermove', stop);
+    addEventListener('pointerup', stop);
+    addEventListener('pointercancel', stop);
+  });
+}
+
 // ---------- Keyboard, paste and drop ----------
 
 function onKey(e) {
   const typing = e.target.closest?.('input, textarea, select, [contenteditable]');
+  if ((e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) && !typing && !S.dlg && !menu.isOpen) {
+    e.preventDefault();
+    return keyboardMenu(e.target);
+  }
   if (e.key === 'Escape') {
     if (editing) return closeEditor(true);
     if (S.dlg) return;
@@ -980,6 +1299,14 @@ function onKey(e) {
   if (mod && k === 'a') {
     e.preventDefault();
     return selectAll();
+  }
+  if (mod && k === 'c' && view.selection.size) {
+    e.preventDefault();
+    return copySelection();
+  }
+  if (mod && k === 'g') {
+    e.preventDefault();
+    return setGroup(!e.shiftKey);
   }
   if (mod) return;
   if (e.key === 'Delete' || e.key === 'Backspace') return removeSelected();
@@ -1094,6 +1421,24 @@ async function start() {
     if (files.length) {
       e.preventDefault();
       openFiles(files);
+      return;
+    }
+    // Elements copied from a board (here or in another tab), or the ones copied last here.
+    const text = e.clipboardData?.getData('text') || '';
+    const els = readClip(text) || (!text ? clip : null);
+    if (els?.length) {
+      e.preventDefault();
+      pasteElements(els);
+    }
+  });
+  wireMenus();
+  document.addEventListener('contextmenu', (e) => {
+    // The Menu key on the page itself (no element of ours under it): the board menu.
+    if (e.button === -1 || (e.clientX === 0 && e.clientY === 0 && !e.target.closest('input, textarea'))) {
+      if (performance.now() - menu.openedAt > 800 && !S.dlg && !e.target.closest('#chat-list .msg, .people .person, .cmenu')) {
+        e.preventDefault();
+        keyboardMenu(e.target);
+      }
     }
   });
   const stage = $('#stage');
@@ -1183,6 +1528,8 @@ async function start() {
     redo,
     media,
     leave: leaveBoard,
+    select: (ids) => app.select(ids),
+    menu,
     chat: () => session.chat,
   };
 }

@@ -206,6 +206,19 @@ describe('validation', () => {
     expect(FIELDS.text('a'.repeat(6000))).toHaveLength(5000);
   });
 
+  it('keeps the lock and group fields, and drops bad ones', () => {
+    expect(cleanFields({ lock: true, grp: 'g1abc' })).toEqual({ lock: true, grp: 'g1abc' });
+    expect(cleanFields({ lock: 'yes', grp: 'no spaces!' })).toEqual({});
+    expect(FIELDS.grp('')).toBe('');
+    const a = new Board('a');
+    a.create('e1', { type: 'rect', z: 3 });
+    a.create('e2', { type: 'rect', z: -2 });
+    a.change('e1', { lock: true, grp: 'g1' });
+    expect(a.get('e1')).toMatchObject({ lock: true, grp: 'g1' });
+    expect(a.bottomZ()).toBe(-2);
+    expect(a.topZ()).toBe(3);
+  });
+
   it('ignores malformed operations', () => {
     const a = new Board('a');
     for (const op of [null, {}, { k: 's', id: 'bad id!', t: 1, r: 'x', f: { type: 'rect' } }, { k: 's', id: 'ok1', t: 0, r: 'x', f: { type: 'rect' } }, { k: 's', id: 'ok1', t: 1.5, r: 'x', f: {} }, { k: 'zzz', id: 'ok1' }]) {

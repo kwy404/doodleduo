@@ -29,7 +29,7 @@
     </div>
     <div class="topbar-side topbar-end">
       <div class="people" :aria-label="t('people.label')" role="list">
-        <span v-for="p in S.people" :key="p.id" role="listitem" class="person" :class="{ 'in-call': p.call, 'is-speaking': p.speaking, 'is-muted': p.muted }" :data-peer="p.id" :style="{ '--c': p.color }" :title="(p.me ? p.name + ' (' + t('people.you') + ')' : p.name) + (p.muted ? ', ' + t('call.mutedNote') : '')" v-text="initial(p.name)"></span>
+        <span v-for="p in S.people" :key="p.id" role="listitem" tabindex="0" aria-haspopup="menu" class="person" :class="{ 'in-call': p.call, 'is-speaking': p.speaking, 'is-muted': p.muted }" :data-peer="p.id" :style="{ '--c': p.color }" :title="(p.me ? p.name + ' (' + t('people.you') + ')' : p.name) + (p.muted ? ', ' + t('call.mutedNote') : '')" v-text="initial(p.name)"></span>
       </div>
       <span class="badge badge-soft live-badge" v-show="S.connected"><span class="live-dot" aria-hidden="true"></span><span v-text="t('people.live', { n: S.people.length })"></span></span>
       <button id="call-btn" type="button" class="btn btn-ghost btn-square btn-sm" v-show="S.connected && !S.call.in" @click="joinCall()" :aria-label="t('top.call')" :title="t('top.call')"><svg class="ic" aria-hidden="true"><use href="icons.svg#i-call"/></svg></button>
@@ -65,7 +65,7 @@
       <header class="chat-head"><svg class="ic" aria-hidden="true"><use href="icons.svg#i-chat"/></svg><h2 v-text="t('chat.title')">Chat</h2><button type="button" class="btn btn-ghost btn-square btn-xs" @click="toggleChat()" :aria-label="t('dlg.close')"><svg class="ic" aria-hidden="true"><use href="icons.svg#i-close"/></svg></button></header>
       <div class="chat-list" id="chat-list" role="log" aria-live="polite">
         <p class="chat-empty" v-show="!S.chat.length" v-text="t('chat.empty')"></p>
-        <article v-for="m in S.chat" :key="m.id" class="msg" :class="{ mine: m.mine }" :data-id="m.id">
+        <article v-for="m in S.chat" :key="m.id" tabindex="0" aria-haspopup="menu" class="msg" :class="{ mine: m.mine }" :data-id="m.id">
           <p class="msg-quote" v-show="m.replyName"><svg class="ic" aria-hidden="true"><use href="icons.svg#i-reply"/></svg><b v-text="m.replyName"></b><span v-text="m.replyText"></span></p>
           <p class="msg-meta"><b :style="{ color: m.color }" v-text="m.name"></b><time v-text="m.time"></time></p>
           <p class="msg-text" v-text="m.text"></p>
@@ -276,7 +276,7 @@
       <div class="field devices"><span class="field-label" v-text="t('devices.title')">Microphone, camera and speaker</span>
         <label class="device-row"><svg class="ic" aria-hidden="true"><use href="icons.svg#i-mic"/></svg><span class="sr-only" v-text="t('devices.mic')">Microphone</span><select id="mic-select" class="select" v-model="S.micId" @change="setMic($event.target.value)"><option value="" v-text="t('devices.default')">System default</option><option v-for="d in S.devices.mic" :key="d.id" :value="d.id" v-text="d.label"></option></select></label>
         <label class="device-row"><svg class="ic" aria-hidden="true"><use href="icons.svg#i-camera"/></svg><span class="sr-only" v-text="t('devices.cam')">Camera</span><select id="cam-select" class="select" v-model="S.camId" @change="setCamera($event.target.value)"><option value="" v-text="t('devices.default')">System default</option><option v-for="d in S.devices.cam" :key="d.id" :value="d.id" v-text="d.label"></option></select></label>
-        <label class="device-row" v-show="S.canPickSpeaker"><svg class="ic" aria-hidden="true"><use href="icons.svg#i-call"/></svg><span class="sr-only" v-text="t('devices.out')">Speaker</span><select id="out-select" class="select" v-model="S.outId" @change="setSpeaker($event.target.value)"><option value="" v-text="t('devices.default')">System default</option><option v-for="d in S.devices.out" :key="d.id" :value="d.id" v-text="d.label"></option></select></label>
+        <label class="device-row" v-show="S.canPickSpeaker"><svg class="ic" aria-hidden="true"><use href="icons.svg#i-volume"/></svg><span class="sr-only" v-text="t('devices.out')">Speaker</span><select id="out-select" class="select" v-model="S.outId" @change="setSpeaker($event.target.value)"><option value="" v-text="t('devices.default')">System default</option><option v-for="d in S.devices.out" :key="d.id" :value="d.id" v-text="d.label"></option></select></label>
         <p class="text-sm text-muted-foreground" v-text="t('devices.hint')"></p>
       </div>
       <div class="field"><span class="field-label" v-text="t('settings.noise')">Noise suppression</span>

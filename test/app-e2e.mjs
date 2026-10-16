@@ -1,5 +1,8 @@
 // End to end test in a real browser, with live public relays for the six word pairing.
 // Two people, each in their own browser profile (a fresh user data folder) with fake devices:
+//   0. Ana works alone with the context menu: right click on the empty board and on a note,
+//      keys and a submenu, copy and paste, group, send to back, lock, Shift+F10, a long press
+//      with a finger, and placement in the bottom right corner.
 //   1. Ana draws alone, then invites Bia. The invite shows six words, a QR code and a link; the
 //      test checks that all three carry the same words.
 //   2. Bia joins three times, once each way, and lands in the same room every time: by opening
@@ -7,7 +10,8 @@
 //      (it spreads one word per box), and by the link decoded from the QR code. Each time she
 //      reads the confirmation words back, which Ana types.
 //   3. Ana and Bia draw and edit the same elements at once; both replicas must end identical.
-//   4. Undo, chat with a reply and a reaction, a voice call through the noise suppression
+//   4. Undo, chat with a reply and a reaction (and the menu of a message), a voice call (and
+//      the menu of a call member) through the noise suppression
 //      worklet, mute, the microphone and camera pickers, camera bubbles next to the cursor,
 //      camera off, screen sharing, the mic test and the exports.
 // The site is served under /doodleduo/, like GitHub Pages.
@@ -176,7 +180,7 @@ try {
   await stroke(ana, 300, 300);
   await run(ana, () => window.doodleduo.edit('create', 3));
   await ana.page.setInputFiles('#image-file', { name: 'dot.png', mimeType: 'image/png', buffer: await pictureOf(ana) });
-  await ana.page.waitForFunction(() => window.doodleduo.view().list.some((e) => e.type === 'image'), null, { timeout: 15000 });
+  await ana.page.waitForFunction(() => window.doodleduo.view().list.some((e) => e.type === 'image'), null, { timeout: 45000 });
   log('Ana drew a stroke, three shapes and a picture alone');
 
   // Two fingers: spread them apart to zoom in, then move both to pan.
@@ -208,6 +212,172 @@ try {
   ok(pinch.zoomed > 2.5 && pinch.panned && pinch.drew === 0, `two fingers pinch zoom and pan without drawing (${JSON.stringify(pinch)})`);
   await run(ana, () => window.doodleduo.view().fit());
   log(`two fingers zoomed ${pinch.zoomed.toFixed(1)} times and panned, without drawing`);
+
+  // Context menu on the board, alone: right click, keys, submenus, long press, edges.
+  const menuOn = (p) => p.page.waitForSelector('.cmenu.is-open[role="menu"]', { timeout: 5000 });
+  const menuGone = (p) => p.page.waitForSelector('.cmenu', { state: 'detached', timeout: 5000 });
+  const pick = async (p, cmd) => {
+    await p.page.click(`.cmenu [data-cmd="${cmd}"]`);
+    await menuGone(p);
+  };
+  const notes = (p) => run(p, () => window.doodleduo.view().list.filter((e) => e.type === 'note').map((e) => ({ id: e.id, color: e.color, z: e.z, x: e.x, y: e.y, lock: !!e.lock, grp: e.grp || '', text: e.text })));
+  const centerOf = (p, id) =>
+    run(p, (id2) => {
+      const v = window.doodleduo.view();
+      const el = v.list.find((e) => e.id === id2);
+      const r = v.canvas.getBoundingClientRect();
+      const [x, y] = v.toScreen(el.x + el.w / 2, el.y + el.h / 2);
+      return [r.left + x, r.top + y];
+    }, id);
+  const inside = (p, sel) => run(p, (s) => [...document.querySelectorAll(s)].every((m) => {
+    const r = m.getBoundingClientRect();
+    return r.left >= 0 && r.top >= 0 && r.right <= innerWidth && r.bottom <= innerHeight && r.width > 0;
+  }), sel);
+
+  await ana.page.click('[data-tool="select"]');
+  await run(ana, () => {
+    const v = window.doodleduo.view();
+    v.cam = { ...v.cam, x: v.cam.x + 6000 };
+    v.dirty(true);
+  });
+  await ana.page.mouse.click(640, 420, { button: 'right' });
+  await menuOn(ana);
+  const boardCmds = await ana.page.$$eval('.cmenu [role="menuitem"]', (n) => n.map((x) => x.dataset.cmd));
+  ok(['paste', 'add-note', 'add-text', 'fit'].every((c) => boardCmds.includes(c)), `the board menu has paste, sticky note, text and zoom to fit (${boardCmds.join(', ')})`);
+  await pick(ana, 'add-note');
+  await ana.page.waitForFunction(() => document.activeElement?.id === 'text-editor', null, { timeout: 5000 });
+  await ana.page.keyboard.type('Plan');
+  await ana.page.keyboard.press('Escape');
+  const [note] = await notes(ana);
+  ok(note?.text === 'Plan', 'Add a sticky note puts a note where the menu opened');
+  log(`right click on the empty board: ${boardCmds.length} items, and "Add a sticky note" made a note there`);
+
+  // Keys: type to jump to Color, open its submenu with the right arrow, pick with Enter.
+  const [nx, ny] = await centerOf(ana, note.id);
+  await ana.page.mouse.click(nx, ny, { button: 'right' });
+  await menuOn(ana);
+  const elCmds = await ana.page.$$eval('.cmenu [role="menuitem"]', (n) => n.map((x) => x.dataset.cmd));
+  ok(['copy', 'duplicate', 'delete', 'front', 'back', 'lock', 'color', 'group'].every((c) => elCmds.includes(c)), `the element menu has every action (${elCmds.join(', ')})`);
+  await ana.page.keyboard.type('col');
+  ok((await run(ana, () => document.activeElement?.dataset.cmd)) === 'color', 'typing letters jumps to Color');
+  await ana.page.keyboard.press('ArrowRight');
+  await ana.page.waitForFunction(() => document.querySelectorAll('.cmenu').length === 2 && document.activeElement?.closest('.cmenu') === document.querySelectorAll('.cmenu')[1], null, { timeout: 5000 });
+  ok((await run(ana, () => document.querySelector('[data-cmd="color"]').getAttribute('aria-expanded'))) === 'true', 'the Color item says its submenu is open');
+  await ana.page.keyboard.press('ArrowLeft');
+  ok((await run(ana, () => document.querySelectorAll('.cmenu').length === 1 && document.activeElement?.dataset.cmd === 'color')), 'the left arrow closes the submenu and goes back to Color');
+  await ana.page.keyboard.press('ArrowRight');
+  await ana.page.keyboard.press('ArrowDown');
+  await ana.page.keyboard.press('Enter');
+  await menuGone(ana);
+  const recolored = (await notes(ana)).find((n) => n.id === note.id);
+  ok(recolored.color !== note.color, `the color submenu recolors the note (${note.color} to ${recolored.color})`);
+  log('keys: letters jump to Color, the right arrow opens its submenu, the left arrow closes it, Enter picks a color');
+
+  // Copy, then paste on the empty board.
+  await ana.page.mouse.click(nx, ny, { button: 'right' });
+  await menuOn(ana);
+  await pick(ana, 'copy');
+  await ana.page.mouse.click(300, 600, { button: 'right' });
+  await menuOn(ana);
+  await pick(ana, 'paste');
+  ok((await notes(ana)).length === 2, 'Paste here adds a copy of the note');
+  log('Copy on the note and Paste here on the empty board made a second note');
+
+  // Group: select both notes, group them, then one click selects both.
+  await run(ana, () => {
+    const v = window.doodleduo.view();
+    const ids = v.list.filter((e) => e.type === 'note').map((e) => e.id);
+    window.doodleduo.select(ids);
+  });
+  await ana.page.mouse.click(nx, ny, { button: 'right' });
+  await menuOn(ana);
+  await pick(ana, 'group');
+  const grouped = await notes(ana);
+  ok(grouped[0].grp && grouped.every((n) => n.grp === grouped[0].grp), 'Group gives both notes one group');
+  await ana.page.mouse.click(900, 200);
+  await ana.page.mouse.click(nx, ny);
+  ok((await run(ana, () => window.doodleduo.S.selected)) === 2, 'a click on one grouped note selects the group');
+  await ana.page.mouse.click(nx, ny, { button: 'right' });
+  await menuOn(ana);
+  await pick(ana, 'ungroup');
+  ok((await notes(ana)).every((n) => !n.grp), 'Ungroup clears the group');
+  log('Group, a click that selects the whole group, and Ungroup');
+
+  // Send to back, then lock: a locked note does not move or erase, and unlocks from the menu.
+  await ana.page.mouse.click(900, 200);
+  await ana.page.mouse.click(nx, ny, { button: 'right' });
+  await menuOn(ana);
+  await pick(ana, 'back');
+  const lowest = await run(ana, () => Math.min(...window.doodleduo.view().list.map((e) => e.z ?? 0)));
+  ok((await notes(ana)).find((n) => n.id === note.id).z === lowest, 'Send to back puts the note below everything');
+  await ana.page.mouse.click(nx, ny, { button: 'right' });
+  await menuOn(ana);
+  await pick(ana, 'lock');
+  const before = (await notes(ana)).find((n) => n.id === note.id);
+  await ana.page.mouse.move(nx, ny);
+  await ana.page.mouse.down();
+  await ana.page.mouse.move(nx + 120, ny + 60, { steps: 6 });
+  await ana.page.mouse.up();
+  await ana.page.click('[data-tool="eraser"]');
+  await ana.page.mouse.move(nx - 30, ny);
+  await ana.page.mouse.down();
+  await ana.page.mouse.move(nx + 30, ny, { steps: 6 });
+  await ana.page.mouse.up();
+  await ana.page.click('[data-tool="select"]');
+  const after = (await notes(ana)).find((n) => n.id === note.id);
+  ok(after && after.lock && after.x === before.x && after.y === before.y, 'a locked note neither moves nor erases');
+  await ana.page.mouse.click(nx, ny, { button: 'right' });
+  await menuOn(ana);
+  const lockedCmds = await ana.page.$$eval('.cmenu [role="menuitem"]', (n) => n.map((x) => x.dataset.cmd));
+  ok(lockedCmds[0] === 'unlock' && !lockedCmds.includes('delete'), 'a locked note offers Unlock first and no Delete');
+  await pick(ana, 'unlock');
+  ok(!(await notes(ana)).find((n) => n.id === note.id).lock, 'Unlock frees the note');
+  log('Send to back; a locked note stayed put under a drag and the eraser, then Unlock freed it');
+
+  // Escape gives focus back; Shift+F10 opens on the selection with the first item focused.
+  await ana.page.mouse.click(nx, ny);
+  await run(ana, () => document.querySelector('[data-tool="select"]').focus());
+  const focusBefore = await run(ana, () => document.activeElement?.dataset.tool || document.activeElement?.id);
+  await ana.page.keyboard.press('Shift+F10');
+  await menuOn(ana);
+  ok((await run(ana, () => document.activeElement?.getAttribute('role'))) === 'menuitem', 'Shift+F10 focuses the first item');
+  await ana.page.keyboard.press('Escape');
+  await menuGone(ana);
+  ok((await run(ana, () => document.activeElement?.dataset.tool || document.activeElement?.id)) === focusBefore, 'Escape closes the menu and gives the focus back');
+  log('Shift+F10 opens the menu on the selection with the first item focused, and Escape returns the focus');
+
+  // Long press with a finger.
+  await run(ana, async ([x, y]) => {
+    const c = document.getElementById('board');
+    c.dispatchEvent(new PointerEvent('pointerdown', { pointerId: 31, pointerType: 'touch', isPrimary: true, clientX: x, clientY: y, bubbles: true }));
+    await new Promise((r) => setTimeout(r, 750));
+    c.dispatchEvent(new PointerEvent('pointerup', { pointerId: 31, pointerType: 'touch', isPrimary: true, clientX: x, clientY: y, bubbles: true }));
+  }, [nx, ny]);
+  await menuOn(ana);
+  ok((await ana.page.$$eval('.cmenu [role="menuitem"]', (n) => n.map((x) => x.dataset.cmd))).includes('lock'), 'a long press opens the element menu');
+  await ana.page.keyboard.press('Escape');
+  log('a long press with a finger opens the same menu');
+
+  // Edges: open in the bottom right corner, then the color submenu; both stay on screen.
+  await run(ana, ([x, y]) => {
+    const v = window.doodleduo.view();
+    const el = v.list.find((e) => e.type === 'note');
+    const r = v.canvas.getBoundingClientRect();
+    v.cam = { ...v.cam, x: el.x + el.w / 2 - (x - r.left) / v.cam.z, y: el.y + el.h / 2 - (y - r.top) / v.cam.z };
+    v.dirty(true);
+  }, [1250, 640]);
+  ok((await run(ana, () => document.elementFromPoint(1250, 640)?.id)) === 'board', 'the corner point is on the board');
+  await ana.page.mouse.click(1250, 640, { button: 'right' });
+  await menuOn(ana);
+  await ana.page.hover('.cmenu [data-cmd="color"]');
+  await ana.page.waitForFunction(() => document.querySelectorAll('.cmenu.is-open').length === 2, null, { timeout: 5000 });
+  ok(await inside(ana, '.cmenu'), 'the menu and its submenu stay inside the viewport in the corner');
+  ok((await run(ana, () => document.querySelectorAll('.cmenu')[1].dataset.side)) === 'left', 'the submenu flips to the left at the right edge');
+  await ana.page.keyboard.press('Escape');
+  await ana.page.keyboard.press('Escape');
+  await menuGone(ana);
+  await run(ana, () => window.doodleduo.view().fit());
+  log('in the bottom right corner the menu flips up and left and its submenu opens to the left, all on screen');
 
   // Way 1: the invite link, opened in a fresh page load.
   const first = await openInvite(ana);
@@ -301,6 +471,16 @@ try {
   ok(await ana.page.locator('#chat-list .msg-quote b', { hasText: 'Ana' }).filter({ visible: true }).count(), 'the reply shows the message it answers');
   ok(await bia.page.locator(`#chat-list .msg[data-id="${firstMsg}"] .reaction[data-key="heart"]`).isVisible(), 'the reaction shows under the message');
   log('a message, a reply and a reaction reached both');
+
+  // The menu of a chat message: React in a submenu, by right click.
+  await bia.page.click(`#chat-list .msg[data-id="${firstMsg}"] .msg-text`, { button: 'right' });
+  await menuOn(bia);
+  ok((await bia.page.$$eval('.cmenu [role="menuitem"]', (n) => n.map((x) => x.dataset.cmd))).join(',') === 'reply,react,copy-text', 'a chat message offers Reply, React and Copy the text');
+  await bia.page.hover('.cmenu [data-cmd="react"]');
+  await bia.page.waitForSelector('.cmenu [data-cmd="react-laugh"]', { timeout: 5000 });
+  await pick(bia, 'react-laugh');
+  await ana.page.waitForFunction((id) => window.doodleduo.chat().reactionsOf(id).some((r) => r.key === 'laugh' && r.count === 1), firstMsg, { timeout: 15000 });
+  log('the menu of a chat message reacted with a laugh, and Ana got it');
   for (const p of [ana, bia]) await p.page.click('#chat-btn');
 
   // Voice: Ana and Bia join the call. Audio must flow, through the noise suppression worklet.
@@ -324,6 +504,19 @@ try {
   let bytes = await flowing();
   ok(bytes > 0, `Bia receives Ana's voice (${bytes} bytes in a second)`);
   log(`voice call: audio flows from Ana to Bia (${bytes} bytes in a second), Strong noise suppression on`);
+
+  // The menu of a call member: Mute for me on Bia's side only.
+  await bia.page.click(`.people .person[data-peer="${anaId}"]`, { button: 'right' });
+  await menuOn(bia);
+  await pick(bia, 'mute-for-me');
+  const silenced = () => run(bia, (id) => [...window.doodleduo.media.remote.get(id).audio.values()].map((a) => a.muted), anaId);
+  ok((await silenced()).every(Boolean), 'Mute for me silences Ana on the device of Bia');
+  ok(!(await run(ana, () => window.doodleduo.media.muted)), 'Ana herself is not muted');
+  await bia.page.click(`.people .person[data-peer="${anaId}"]`, { button: 'right' });
+  await menuOn(bia);
+  await pick(bia, 'mute-for-me');
+  ok((await silenced()).every((m) => !m), 'Unmute for me brings Ana back');
+  log('the menu of a call member muted Ana for Bia only, then unmuted her');
 
   // Mute: the track goes off, Bia sees it, and unmute brings it back.
   await ana.page.click('#mute-btn');

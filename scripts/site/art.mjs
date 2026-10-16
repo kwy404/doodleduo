@@ -118,6 +118,17 @@ export const ICONS = {
   maximize: '<path d="M9 4H4v5M15 4h5v5M20 15v5h-5M4 15v5h5"/>',
   minimize: '<path d="M4 9h5V4M20 9h-5V4M15 20v-5h5M9 20v-5H4"/>',
   wave: '<path d="M3 12h2M7 8v8M11 5v14M15 8v8M19 11v2"/>',
+  back: '<rect x="4" y="4" width="11" height="11" rx="2" opacity=".55"/><path d="M15 9h3.5A1.5 1.5 0 0 1 20 10.5v8a1.5 1.5 0 0 1-1.5 1.5h-8A1.5 1.5 0 0 1 9 18.5V15"/>',
+  unlock: '<rect x="5" y="10.5" width="14" height="10" rx="2.5"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 6.8-1.2"/><path d="M12 14.5v2.5"/>',
+  copy: '<rect x="8" y="3.5" width="11.5" height="14" rx="2"/><path d="M5.5 7v11.5a2 2 0 0 0 2 2H15"/>',
+  paste: '<path d="M9 4.5h6v3H9z"/><path d="M15 6h2.5A1.5 1.5 0 0 1 19 7.5v11a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 5 18.5v-11A1.5 1.5 0 0 1 6.5 6H9"/><path d="M9 12h6M9 15.5h4" opacity=".6"/>',
+  group: '<rect x="3.5" y="3.5" width="17" height="17" rx="2.5" stroke-dasharray="2.6 2.4"/><rect x="7" y="7" width="5.5" height="5.5" rx="1.2"/><circle cx="14.5" cy="14.5" r="3"/>',
+  ungroup: '<rect x="3.5" y="3.5" width="8" height="8" rx="1.8"/><circle cx="16" cy="16" r="4.5"/><path d="M14 4.5l5.5 5.5M19.5 4.5L14 10" opacity=".6"/>',
+  palette: '<path d="M12 3.5a8.5 8.5 0 0 0 0 17c1.3 0 1.8-.9 1.4-1.9-.5-1.2.2-2.4 1.6-2.4h1.7a3.8 3.8 0 0 0 3.8-3.8C20.5 7.3 16.7 3.5 12 3.5z"/><circle cx="7.8" cy="11" r="1.1"/><circle cx="10.5" cy="7.5" r="1.1"/><circle cx="15" cy="7.8" r="1.1"/>',
+  more: '<circle cx="6" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="18" cy="12" r="1.2"/>',
+  volume: '<path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/>',
+  mute: '<path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M16 9.5l5 5M21 9.5l-5 5"/>',
+  locate: '<circle cx="12" cy="12" r="4"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/>',
   link: '<path d="M10.5 13.5a3.6 3.6 0 0 0 5.1 0l3.1-3.1a3.6 3.6 0 0 0-5.1-5.1l-1.2 1.2"/><path d="M13.5 10.5a3.6 3.6 0 0 0-5.1 0l-3.1 3.1a3.6 3.6 0 0 0 5.1 5.1l1.2-1.2"/>',
 };
 

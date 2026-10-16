@@ -37,6 +37,10 @@ export const FIELDS = {
   del: (v) => (typeof v === 'boolean' ? v : undefined),
   end: (v) => (typeof v === 'boolean' ? v : undefined),
   by: (v) => (typeof v === 'string' && v.length <= 40 ? v : undefined),
+  // Locked elements cannot be selected, moved or erased until someone unlocks them.
+  lock: (v) => (typeof v === 'boolean' ? v : undefined),
+  // Elements that share a group id are selected together. An empty string means no group.
+  grp: (v) => (typeof v === 'string' && /^[A-Za-z0-9_-]{0,40}$/.test(v) ? v : undefined),
 };
 
 /** Cleans a set of fields, dropping unknown names and bad values. */
@@ -205,6 +209,13 @@ export class Board {
   topZ() {
     let z = 0;
     for (const e of this.elements.values()) z = Math.max(z, e.f.get('z')?.v ?? 0);
+    return z;
+  }
+
+  /** The lowest z in use, for sending an element to the back. */
+  bottomZ() {
+    let z = 0;
+    for (const e of this.elements.values()) z = Math.min(z, e.f.get('z')?.v ?? 0);
     return z;
   }
 
