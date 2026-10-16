@@ -22,7 +22,13 @@ export function browserPath() {
   return found;
 }
 
-const ARGS = ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', '--autoplay-policy=no-user-gesture-required'];
+const ARGS = [
+  '--use-fake-device-for-media-stream',
+  '--use-fake-ui-for-media-stream',
+  '--autoplay-policy=no-user-gesture-required',
+  '--auto-select-desktop-capture-source=Entire screen',
+  '--enable-features=GetDisplayMediaSetAutoSelectAllScreens',
+];
 
 /** A persistent context in its own fresh user data folder. close() also removes the folder. */
 export async function launchContext(options = {}) {
@@ -33,6 +39,7 @@ export async function launchContext(options = {}) {
     args: ARGS,
     viewport: { width: 1280, height: 800 },
     locale: 'en-US',
+    permissions: ['microphone', 'camera'],
     ...options,
   });
   const close = context.close.bind(context);

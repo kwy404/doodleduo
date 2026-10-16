@@ -29,9 +29,11 @@
     </div>
     <div class="topbar-side topbar-end">
       <div class="people" :aria-label="t('people.label')" role="list">
-        <span v-for="p in S.people" :key="p.id" role="listitem" class="person" :style="{ '--c': p.color }" :title="p.me ? p.name + ' (' + t('people.you') + ')' : p.name" v-text="initial(p.name)"></span>
+        <span v-for="p in S.people" :key="p.id" role="listitem" class="person" :class="{ 'in-call': p.call, 'is-speaking': p.speaking }" :style="{ '--c': p.color }" :title="p.me ? p.name + ' (' + t('people.you') + ')' : p.name" v-text="initial(p.name)"></span>
       </div>
       <span class="badge badge-soft live-badge" v-show="S.connected"><span class="live-dot" aria-hidden="true"></span><span v-text="t('people.live', { n: S.people.length })"></span></span>
+      <button id="call-btn" type="button" class="btn btn-ghost btn-square btn-sm" v-show="S.connected && !S.call.in" @click="joinCall()" :aria-label="t('top.call')" :title="t('top.call')"><svg class="ic" aria-hidden="true"><use href="icons.svg#i-call"/></svg></button>
+      <button id="chat-btn" type="button" class="btn btn-ghost btn-square btn-sm chat-btn" :class="{ 'is-on': S.chatOpen }" @click="toggleChat()" :aria-label="t('top.chat')" :title="t('top.chat')"><svg class="ic" aria-hidden="true"><use href="icons.svg#i-chat"/></svg><span class="unread" v-show="S.unread > 0" v-text="S.unread"></span></button>
       <button id="join-btn" type="button" class="btn btn-ghost btn-sm" @click="openJoin()"><svg class="ic" aria-hidden="true"><use href="icons.svg#i-words"/></svg><span class="hide-sm" v-text="t('top.join')">Join</span></button>
       <button id="invite-btn" type="button" class="btn btn-primary invite-btn" @click="invite()"><svg class="ic" aria-hidden="true"><use href="icons.svg#i-invite"/></svg><span class="inv-long" v-text="t('top.invite')">Invite friends</span><span class="inv-short" v-text="t('top.inviteShort')">Invite</span></button>
       <button id="settings-btn" type="button" class="btn btn-ghost btn-square btn-sm" @click="openDialog('settings')" :aria-label="t('top.settings')" :title="t('top.settings')"><svg class="ic" aria-hidden="true"><use href="icons.svg#i-settings"/></svg></button>
@@ -40,8 +42,48 @@
 
   <main id="stage" class="stage">
     <canvas id="board" class="board" :aria-label="t('board.label')" role="img"></canvas>
-    <div id="cursors" class="cursors" aria-hidden="true" v-ignore></div>
+    <div id="cursors" class="cursors" :class="{ 'no-bubbles': !S.bubbles }" aria-hidden="true"></div>
     <textarea id="text-editor" class="text-editor" hidden spellcheck="false" aria-label="Text" v-ignore></textarea>
+
+    <div class="panel callbar" id="callbar" v-show="S.call.in" role="toolbar" :aria-label="t('call.label')">
+      <span class="call-count"><span class="live-dot" aria-hidden="true"></span><span v-text="t('call.count', { n: S.call.count })"></span></span>
+      <button id="mute-btn" type="button" class="tool-btn" :aria-pressed="S.call.muted ? 'true' : 'false'" @click="toggleMute()" :aria-label="S.call.muted ? t('call.unmute') : t('call.mute')" :title="S.call.muted ? t('call.unmute') : t('call.mute')"><svg class="ic" aria-hidden="true"><use :href="'icons.svg#i-' + (S.call.muted ? 'mic-off' : 'mic')"/></svg></button>
+      <button id="camera-btn" type="button" class="tool-btn" :aria-pressed="S.call.camera ? 'true' : 'false'" @click="toggleCamera()" :aria-label="t('call.camera')" :title="t('call.camera')"><svg class="ic" aria-hidden="true"><use :href="'icons.svg#i-' + (S.call.camera ? 'camera' : 'camera-off')"/></svg></button>
+      <button id="screen-btn" type="button" class="tool-btn hide-xs" :aria-pressed="S.call.screen ? 'true' : 'false'" @click="toggleScreen()" :aria-label="t('call.screen')" :title="t('call.screen')"><svg class="ic" aria-hidden="true"><use href="icons.svg#i-screen"/></svg></button>
+      <button id="bubbles-btn" type="button" class="tool-btn" :aria-pressed="S.bubbles ? 'true' : 'false'" @click="toggleBubbles()" :aria-label="t('call.bubbles')" :title="t('call.bubbles')"><svg class="ic" aria-hidden="true"><use href="icons.svg#i-bubbles"/></svg></button>
+      <button id="hangup-btn" type="button" class="tool-btn hangup" @click="leaveCall()" :aria-label="t('call.leave')" :title="t('call.leave')"><svg class="ic" aria-hidden="true"><use href="icons.svg#i-hangup"/></svg></button>
+    </div>
+
+    <video id="self-cam" class="self-cam" muted autoplay playsinline v-show="S.call.camera" v-ignore></video>
+
+    <section class="panel screen-panel" id="screen-panel" v-show="S.screenFrom" :class="{ 'is-big': S.screenBig }" :aria-label="t('screen.label')">
+      <header class="screen-head"><svg class="ic" aria-hidden="true"><use href="icons.svg#i-screen"/></svg><span v-text="t('screen.from', { name: S.screenName })"></span><button type="button" class="btn btn-ghost btn-square btn-xs" @click="toggleScreenSize()" :aria-label="t('screen.size')" :title="t('screen.size')"><svg class="ic" aria-hidden="true"><use :href="'icons.svg#i-' + (S.screenBig ? 'minimize' : 'maximize')"/></svg></button></header>
+      <video id="screen-video" muted autoplay playsinline v-ignore></video>
+    </section>
+
+    <aside class="panel chat-panel" id="chat-panel" v-show="S.chatOpen" :aria-label="t('chat.title')">
+      <header class="chat-head"><svg class="ic" aria-hidden="true"><use href="icons.svg#i-chat"/></svg><h2 v-text="t('chat.title')">Chat</h2><button type="button" class="btn btn-ghost btn-square btn-xs" @click="toggleChat()" :aria-label="t('dlg.close')"><svg class="ic" aria-hidden="true"><use href="icons.svg#i-close"/></svg></button></header>
+      <div class="chat-list" id="chat-list" role="log" aria-live="polite">
+        <p class="chat-empty" v-show="!S.chat.length" v-text="t('chat.empty')"></p>
+        <article v-for="m in S.chat" :key="m.id" class="msg" :class="{ mine: m.mine }" :data-id="m.id">
+          <p class="msg-quote" v-show="m.replyName"><svg class="ic" aria-hidden="true"><use href="icons.svg#i-reply"/></svg><b v-text="m.replyName"></b><span v-text="m.replyText"></span></p>
+          <p class="msg-meta"><b :style="{ color: m.color }" v-text="m.name"></b><time v-text="m.time"></time></p>
+          <p class="msg-text" v-text="m.text"></p>
+          <div class="msg-reactions" v-show="m.reactions.length">
+            <button v-for="r in m.reactions" :key="r.key" type="button" class="reaction" :class="{ mine: r.mine }" :data-key="r.key" :aria-pressed="r.mine ? 'true' : 'false'" @click="react(m.id, r.key)" :aria-label="t('react.' + r.key)"><svg class="ic" aria-hidden="true"><use :href="'icons.svg#i-' + r.key"/></svg><span v-text="r.count"></span></button>
+          </div>
+          <div class="msg-actions">
+            <button type="button" class="msg-act reply-btn" @click="replyTo(m.id)" :aria-label="t('chat.reply')" :title="t('chat.reply')"><svg class="ic" aria-hidden="true"><use href="icons.svg#i-reply"/></svg></button>
+            <button v-for="k in REACTIONS" :key="k" type="button" class="msg-act" :data-react="k" @click="react(m.id, k)" :aria-label="t('react.' + k)" :title="t('react.' + k)"><svg class="ic" aria-hidden="true"><use :href="'icons.svg#i-' + k"/></svg></button>
+          </div>
+        </article>
+      </div>
+      <div class="chat-reply" v-show="S.replyTo"><svg class="ic" aria-hidden="true"><use href="icons.svg#i-reply"/></svg><span class="chat-reply-text" v-text="S.replyTo ? t('chat.replying', { name: S.replyTo.name }) + ': ' + S.replyTo.text : ''"></span><button type="button" class="btn btn-ghost btn-square btn-xs" @click="cancelReply()" :aria-label="t('chat.cancelReply')"><svg class="ic" aria-hidden="true"><use href="icons.svg#i-close"/></svg></button></div>
+      <form class="chat-form" @submit.prevent="sendChat()">
+        <textarea id="chat-input" class="textarea chat-input" rows="1" v-model="S.draft" :placeholder="t('chat.placeholder')" :aria-label="t('chat.placeholder')" maxlength="2000"></textarea>
+        <button id="chat-send" type="submit" class="btn btn-primary btn-square" :aria-label="t('chat.send')" :title="t('chat.send')"><svg class="ic" aria-hidden="true"><use href="icons.svg#i-send"/></svg></button>
+      </form>
+    </aside>
 
     <div class="empty-hint" v-show="S.empty">
       <img src="../assets/head-dark.svg" width="72" height="72" alt="">
@@ -222,6 +264,13 @@
       </div>
       <div class="field"><span class="field-label" v-text="t('settings.theme')">Theme</span>
         <div class="segmented" role="radiogroup"><label class="segmented-item"><input type="radio" name="theme" :checked="S.theme === 'dark'" @change="setTheme('dark')"> <span v-text="t('settings.dark')">Night slate</span></label><label class="segmented-item"><input type="radio" name="theme" :checked="S.theme === 'light'" @change="setTheme('light')"> <span v-text="t('settings.light')">Calm light</span></label></div>
+      </div>
+      <div class="field"><span class="field-label" v-text="t('settings.noise')">Noise suppression</span>
+        <div class="segmented" role="radiogroup"><label class="segmented-item"><input type="radio" name="noise" :checked="S.noiseMode === 'strong'" @change="setNoise('strong')"> <span v-text="t('noise.strong')">Strong</span></label><label class="segmented-item"><input type="radio" name="noise" :checked="S.noiseMode === 'standard'" @change="setNoise('standard')"> <span v-text="t('noise.standard')">Standard</span></label><label class="segmented-item"><input type="radio" name="noise" :checked="S.noiseMode === 'off'" @change="setNoise('off')"> <span v-text="t('noise.off')">Off</span></label></div>
+        <p class="text-sm text-muted-foreground" v-text="t('noise.' + S.noiseMode + 'Why')"></p>
+        <label class="range-row" v-show="S.noiseMode === 'strong'"><span v-text="t('settings.sensitivity')">Sensitivity</span><input id="sensitivity" type="range" class="range" min="0" max="100" :value="S.sensitivity" @change="setSensitivity($event.target.value)"></label>
+        <div class="mic-test"><button id="mic-test-btn" type="button" class="btn btn-outline btn-xs" @click="toggleMicTest()"><svg class="ic" aria-hidden="true"><use href="icons.svg#i-mic"/></svg><span v-text="S.testing ? t('settings.micTestStop') : t('settings.micTest')">Test my mic</span></button><span class="meter" aria-hidden="true"><i :style="{ width: (S.testing ? S.micLevel : 0) + '%' }"></i></span><span class="gate" :class="{ open: S.micGate }" v-show="S.testing && S.noiseMode === 'strong'" v-text="S.micGate ? t('settings.gateOpen') : t('settings.gateClosed')"></span></div>
+        <p class="text-sm text-muted-foreground" v-text="t('settings.micTestHint')"></p>
       </div>
       <div class="field"><span class="field-label" v-text="t('settings.check')">Connection check</span>
         <ul class="stun-list"><li v-for="r in S.stun.results" :key="r.host"><span class="dot" :class="{ ok: r.ok }"></span><span v-text="r.host"></span><span class="ms" v-text="r.ok ? r.ms + ' ms' : t('settings.noAnswer')"></span></li></ul>

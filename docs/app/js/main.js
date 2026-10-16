@@ -11,6 +11,8 @@ import { STROKE_TYPES } from '../core/crdt.js';
 import { FILE_EXTENSION } from '../core/format.js';
 import { Gesture, Input, View } from './canvas.js';
 import { Session, MAX_MEMBERS } from './session.js';
+import { MediaManager } from './media.js';
+import { REACTIONS } from '../core/chat.js';
 import { wordInputs } from './words-ui.js';
 import { bindStore, detectLang, t } from './i18n.js';
 import * as db from './db.js';
@@ -73,6 +75,22 @@ const S = V.reactive({
   canInstall: false,
   empty: true,
   saved: true,
+  chatOpen: false,
+  chat: [],
+  unread: 0,
+  draft: '',
+  replyTo: null,
+  call: { in: false, muted: false, camera: false, screen: false, count: 0 },
+  bubbles: true,
+  speaking: [],
+  screenFrom: '',
+  screenName: '',
+  screenBig: false,
+  noiseMode: pref('noise', 'strong'),
+  sensitivity: pref('sensitivity', 50),
+  testing: false,
+  micLevel: 0,
+  micGate: false,
 });
 bindStore(S);
 
@@ -80,6 +98,24 @@ const theme = () => ({ ...THEMES[S.theme], select: '#8fa8c2', selectFill: 'rgba(
 const replica = randomId(6);
 let session = null;
 let view = null;
+const media = new MediaManager({
+  get noiseMode() {
+    return S.noiseMode;
+  },
+  set noiseMode(v) {
+    S.noiseMode = v;
+  },
+  get sensitivity() {
+    return S.sensitivity;
+  },
+  set sensitivity(v) {
+    S.sensitivity = v;
+  },
+  save() {
+    setPref('noise', S.noiseMode);
+    setPref('sensitivity', S.sensitivity);
+  },
+});
 let installEvent = null;
 
 function applyTheme() {
@@ -561,8 +597,12 @@ function cursorEl(id) {
     const node = document.createElement('div');
     node.className = 'peer-cursor';
     node.innerHTML = '<svg viewBox="0 0 16 22" aria-hidden="true"><path d="M1 1 L1 18 L5.6 14 L9 21 L11.8 19.8 L8.6 13 L14.8 12.8 Z"/></svg><span class="peer-name"></span>';
+    node.dataset.peer = id;
+    const person = S.people.find((p) => p.id === id);
+    node.style.setProperty('--c', person?.color || PEOPLE_COLORS[0]);
+    node.querySelector('.peer-name').textContent = person?.name || t('people.friend');
     $('#cursors').append(node);
-    c = { node, x: 0, y: 0, timer: 0 };
+    c = { node, x: 0, y: 0, timer: 0, seen: false };
     cursors.set(id, c);
   }
   return c;
@@ -576,6 +616,10 @@ function placeCursor(c) {
 function onCursor({ id, x, y, gone }) {
   if (gone) {
     const c = cursors.get(id);
+    if (c?.node.classList.contains('has-cam') && media.peers.has(id)) {
+      c.node.classList.add('is-idle');
+      return;
+    }
     c?.node.remove();
     cursors.delete(id);
     return;
@@ -585,12 +629,180 @@ function onCursor({ id, x, y, gone }) {
   const c = cursorEl(id);
   c.x = x;
   c.y = y;
+  c.seen = true;
   c.node.style.setProperty('--c', person?.color || PEOPLE_COLORS[0]);
   c.node.querySelector('.peer-name').textContent = person?.name || t('people.friend');
   c.node.classList.remove('is-idle');
   clearTimeout(c.timer);
   c.timer = setTimeout(() => c.node.classList.add('is-idle'), 6000);
   placeCursor(c);
+}
+
+// ---------- Chat ----------
+
+const timeFmt = () => new Intl.DateTimeFormat(S.lang === 'pt' ? 'pt-BR' : 'en', { hour: '2-digit', minute: '2-digit' });
+
+function renderChat() {
+  const me = replica;
+  const fmt = timeFmt();
+  const before = S.chat.length;
+  S.chat = session.chat.list().map((m) => {
+    const parent = m.reply ? session.chat.get(m.reply) : null;
+    return {
+      id: m.id,
+      name: m.name,
+      color: m.color,
+      text: m.text,
+      mine: m.from === me,
+      time: m.ts ? fmt.format(new Date(m.ts)) : '',
+      replyName: parent?.name || '',
+      replyText: parent ? parent.text.slice(0, 90) : '',
+      reactions: session.chat.reactionsOf(m.id, me),
+    };
+  });
+  if (S.chatOpen) {
+    S.unread = 0;
+    if (S.chat.length !== before) requestAnimationFrame(() => {
+      const list = $('#chat-list');
+      if (list) list.scrollTop = list.scrollHeight;
+    });
+  }
+}
+
+function toggleChat() {
+  S.chatOpen = !S.chatOpen;
+  if (S.chatOpen) {
+    S.unread = 0;
+    renderChat();
+    requestAnimationFrame(() => {
+      const list = $('#chat-list');
+      if (list) list.scrollTop = list.scrollHeight;
+      $('#chat-input')?.focus();
+    });
+  }
+}
+
+function sendChat() {
+  const text = String(S.draft || '').trim();
+  if (!text) return;
+  session.say(text, S.replyTo?.id || null);
+  S.draft = '';
+  S.replyTo = null;
+  renderChat();
+  requestAnimationFrame(() => {
+    const list = $('#chat-list');
+    if (list) list.scrollTop = list.scrollHeight;
+  });
+}
+
+function replyTo(id) {
+  const m = session.chat.get(id);
+  if (!m) return;
+  S.replyTo = { id, name: m.name, text: m.text.slice(0, 90) };
+  $('#chat-input')?.focus();
+}
+
+function react(id, key) {
+  session.react(id, key);
+  renderChat();
+}
+
+// ---------- Call, cameras and screens ----------
+
+function syncCall() {
+  const st = media.state;
+  let count = st.call ? 1 : 0;
+  for (const p of media.peers.values()) if (p.call) count++;
+  S.call = { in: st.call, muted: st.muted, camera: st.camera, screen: st.screen, count };
+  S.testing = media.testing;
+  renderPeople();
+}
+
+function renderPeople() {
+  const speaking = media.speaking;
+  S.people = session.people.map((p) => ({ ...p, call: p.me ? media.inCall : !!media.peers.get(p.id)?.call, speaking: speaking.has(p.me ? 'self' : p.id) }));
+}
+
+function renderVideo() {
+  // Camera bubbles next to each person's cursor.
+  for (const [id, p] of media.peers) {
+    const stream = p.camera ? media.remoteVideo(id, 'camera') : null;
+    const c = stream ? cursorEl(id) : cursors.get(id);
+    if (!c) continue;
+    let video = c.node.querySelector('video.cam-bubble');
+    if (stream) {
+      if (!video) {
+        video = document.createElement('video');
+        video.className = 'cam-bubble';
+        video.autoplay = true;
+        video.muted = true;
+        video.playsInline = true;
+        c.node.append(video);
+      }
+      if (video.srcObject !== stream) {
+        video.srcObject = stream;
+        video.play().catch(() => {});
+      }
+      c.node.classList.add('has-cam');
+      if (!c.seen) dock(c, id);
+    } else if (video) {
+      video.srcObject = null;
+      video.remove();
+      c.node.classList.remove('has-cam');
+    }
+  }
+  const self = $('#self-cam');
+  if (self.srcObject !== media.camera) self.srcObject = media.camera || null;
+  if (media.camera) self.play().catch(() => {});
+  // The first screen someone shares.
+  let from = '';
+  let stream = null;
+  for (const [id, p] of media.peers) {
+    const s = p.screen ? media.remoteVideo(id, 'screen') : null;
+    if (s) {
+      from = id;
+      stream = s;
+      break;
+    }
+  }
+  const sv = $('#screen-video');
+  if (sv.srcObject !== stream) {
+    sv.srcObject = stream;
+    if (stream) sv.play().catch(() => {});
+  }
+  S.screenFrom = from;
+  S.screenName = from ? S.people.find((p) => p.id === from)?.name || t('people.friend') : '';
+}
+
+/** A camera bubble for someone whose cursor has not moved yet waits at the side of the slate. */
+function dock(c, id) {
+  const i = [...media.peers.keys()].indexOf(id);
+  const [x, y] = view.toBoard(view.w - 140, 150 + Math.max(0, i) * 120);
+  c.x = x;
+  c.y = y;
+  c.node.classList.remove('is-idle');
+  placeCursor(c);
+}
+
+async function joinCall() {
+  await media.join();
+  syncCall();
+}
+
+function mediaError(code) {
+  toast(t(`media.${code}`) || t('media.failed'), 'warning', 6000);
+}
+
+async function toggleMicTest() {
+  if (media.testing) media.stopMicTest();
+  else {
+    try {
+      await media.startMicTest();
+    } catch (err) {
+      mediaError(err.name === 'NotAllowedError' ? 'mic-denied' : 'mic-failed');
+    }
+  }
+  S.testing = media.testing;
 }
 
 // ---------- Settings ----------
@@ -731,6 +943,17 @@ async function start() {
   document.documentElement.lang = S.lang === 'pt' ? 'pt-BR' : 'en';
   const profile = { id: replica, name: S.name || t('people.you'), color: S.me };
   session = new Session({ profile, turn: pref('turn', null) });
+  session.media = media;
+  media.use(session);
+  media.on('change', syncCall);
+  media.on('video', renderVideo);
+  media.on('speaking', renderPeople);
+  media.on('error', mediaError);
+  media.on('levels', () => {
+    if (!media.testing) return;
+    S.micLevel = Math.min(100, Math.round(media.level('test') * 400));
+    S.micGate = !!media.micLevel?.open;
+  });
   view = new View($('#board'), { getTheme: theme });
   view.onNeed = (hash) => session.need(hash);
   input = new Input($('#board'), app);
@@ -740,9 +963,16 @@ async function start() {
     placeEditor();
   });
 
-  session.on('people', (list) => {
-    S.people = list;
+  session.on('people', () => {
+    renderPeople();
     S.connected = session.connected;
+    for (const [id, c] of cursors) if (!S.people.some((p) => p.id === id)) {
+      c.node.remove();
+      cursors.delete(id);
+    }
+  });
+  session.on('chat-message', (m) => {
+    if (!S.chatOpen && m && m.from !== replica) S.unread++;
   });
   session.on('cursor', onCursor);
   session.on('pairing', syncPair);
@@ -761,6 +991,12 @@ async function start() {
   joinInputs = wordInputs($('#join-words'), { idPrefix: 'join-word', onReady: () => startJoin() });
   confirmInputs = wordInputs($('#confirm-words'), { idPrefix: 'confirm-word', onReady: () => confirmTyped() });
 
+  let chatOff = null;
+  session.on('board', () => {
+    chatOff?.();
+    chatOff = session.chat.onChange(renderChat);
+    renderChat();
+  });
   const last = pref('last', null);
   const known = last ? await db.getBoard(last) : null;
   await openBoard(known ? last : newBoardId(), known ? null : t('board.first'));
@@ -809,6 +1045,12 @@ async function start() {
     openFiles([...e.target.files]);
     e.target.value = '';
   });
+  $('#chat-input').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+      e.preventDefault();
+      sendChat();
+    }
+  });
   const editor = $('#text-editor');
   editor.addEventListener('input', placeEditor);
   editor.addEventListener('blur', () => closeEditor(true));
@@ -843,7 +1085,7 @@ async function start() {
   if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js').catch(() => {});
   setTool('pen');
   S.ready = true;
-  S.people = session.people;
+  renderPeople();
   // A small handle for the browser tests: read the board and make edits through the same
   // path as the tools (one undo step each, sent to every peer).
   window.doodleduo = {
@@ -868,6 +1110,8 @@ async function start() {
     },
     undo,
     redo,
+    media,
+    chat: () => session.chat,
   };
 }
 
@@ -916,6 +1160,22 @@ Object.assign(V.config.globals, {
   install,
   initial: (name) => String(name || '?').trim().charAt(0).toUpperCase() || '?',
   inkColor: (c) => (c === 'ink' ? THEMES[S.theme].ink : c),
+  REACTIONS,
+  toggleChat,
+  sendChat,
+  replyTo,
+  cancelReply: () => (S.replyTo = null),
+  react,
+  joinCall,
+  leaveCall: () => media.leave(),
+  toggleMute: () => media.toggleMute(),
+  toggleCamera: () => media.toggleCamera(),
+  toggleScreen: () => media.toggleScreen(),
+  toggleBubbles: () => (S.bubbles = !S.bubbles),
+  toggleScreenSize: () => (S.screenBig = !S.screenBig),
+  setNoise: (mode) => media.setNoiseMode(mode),
+  setSensitivity: (v) => media.setSensitivity(Number(v)),
+  toggleMicTest,
 });
 
 V.start();

@@ -1,7 +1,10 @@
 // Copied from src/ by scripts/sync-core.mjs. Edit the file in src/ instead.
-// WebRTC links for the mesh: one RTCPeerConnection per pair of people with one ordered,
-// reliable data channel. The offer and the answer wait for ICE gathering to finish (no
-// trickle), so each fits in a single message through the pairing relays or the mesh.
+// WebRTC links for the mesh: one RTCPeerConnection per pair of people, with two pre-negotiated
+// data channels (the board and media negotiation) and optional audio and video tracks for the
+// call, the camera bubbles and screen sharing. The first offer and answer wait for ICE
+// gathering to finish (no trickle), so each fits in one message through the pairing relays or
+// the mesh. Adding or removing tracks later renegotiates over the ctl channel with the
+// perfect negotiation pattern. Adapted from howlden.
 
 export const STUN_SERVERS = ['stun:stun.cloudflare.com:3478', 'stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'];
 
@@ -87,26 +90,42 @@ export function probeAllStun(urls = STUN_SERVERS, options) {
   return Promise.all(urls.map((u) => probeStun(u, options)));
 }
 
+const DC_BOARD = 0;
+const DC_CTL = 1;
+const SLOTS = ['mic', 'camera', 'screen'];
+
 export class RtcLink {
   constructor({ iceServers = buildIceServers(), gatherTimeout = 6000, RTCPeerConnection: PC = globalThis.RTCPeerConnection } = {}) {
     this.pc = new PC({ iceServers, bundlePolicy: 'max-bundle' });
     this.gatherTimeout = gatherTimeout;
     this.open = false;
     this.closed = false;
+    this.polite = false;
+    this.ready = false;
+    this.makingOffer = false;
+    this.ignoreOffer = false;
+    this.senders = {};
+    this.localMedia = {};
+    this.remoteMedia = {};
     this.onopen = null;
     this.onmessage = null;
     this.onclose = null;
     this.onfail = null;
     this.onstate = null;
-    this.dc = this.pc.createDataChannel('board', { negotiated: true, id: 0 });
+    this.ontrack = null;
+    this.onmedia = null;
+    this.dc = this.pc.createDataChannel('board', { negotiated: true, id: DC_BOARD });
+    this.ctl = this.pc.createDataChannel('ctl', { negotiated: true, id: DC_CTL });
     this.dc.onopen = () => {
       if (this.open || this.closed) return;
       this.open = true;
+      this.ready = true;
       clearTimeout(this.openTimer);
       this.onopen?.();
     };
     this.dc.onmessage = (e) => this.onmessage?.(e.data);
     this.dc.onclose = () => this._end('closed');
+    this.ctl.onmessage = (e) => this._onCtl(e.data);
     this.pc.onconnectionstatechange = () => {
       const s = this.pc.connectionState;
       this.onstate?.(s);
@@ -118,6 +137,20 @@ export class RtcLink {
         }, 12000);
       } else if (s === 'connected') clearTimeout(this.lostTimer);
     };
+    this.pc.onnegotiationneeded = () => this._negotiate();
+    this.pc.onicecandidate = (e) => {
+      if (e.candidate && this.ready && this.ctl.readyState === 'open') this._ctl({ candidate: e.candidate.toJSON() });
+    };
+    this.pc.ontrack = (e) => {
+      const stream = e.streams[0] || new MediaStream([e.track]);
+      this.ontrack?.({ track: e.track, stream, slot: this.slotOf(stream.id) });
+    };
+  }
+
+  /** The media slot ('mic', 'camera' or 'screen') a remote stream id belongs to. */
+  slotOf(streamId) {
+    for (const [slot, id] of Object.entries(this.remoteMedia)) if (id === streamId) return slot;
+    return null;
   }
 
   async _gather() {
@@ -186,6 +219,105 @@ export class RtcLink {
   /** Bytes waiting in the channel buffer, to slow down big transfers. */
   get buffered() {
     return this.dc.bufferedAmount;
+  }
+
+  _ctl(msg) {
+    if (this.ctl.readyState === 'open') this.ctl.send(JSON.stringify(msg));
+  }
+
+  async _negotiate() {
+    if (!this.ready || this.closed) return;
+    try {
+      this.makingOffer = true;
+      await this.pc.setLocalDescription();
+      this._ctl({ description: this.pc.localDescription.toJSON(), media: this.localMedia });
+    } catch (err) {
+      this.onstate?.(`negotiation error: ${err.message}`);
+    } finally {
+      this.makingOffer = false;
+    }
+  }
+
+  async _onCtl(data) {
+    let msg;
+    try {
+      msg = JSON.parse(data);
+    } catch {
+      return;
+    }
+    try {
+      if (msg.media && typeof msg.media === 'object') {
+        this.remoteMedia = {};
+        for (const slot of SLOTS) if (typeof msg.media[slot] === 'string') this.remoteMedia[slot] = msg.media[slot].slice(0, 80);
+        this.onmedia?.(this.remoteMedia);
+      }
+      if (msg.description) {
+        const d = msg.description;
+        // A stale or repeated answer is ignored.
+        if (d.type === 'answer' && this.pc.signalingState !== 'have-local-offer') return;
+        const collision = d.type === 'offer' && (this.makingOffer || this.pc.signalingState !== 'stable');
+        this.ignoreOffer = !this.polite && collision;
+        if (this.ignoreOffer) return;
+        await this.pc.setRemoteDescription(d);
+        if (d.type === 'offer') {
+          await this.pc.setLocalDescription();
+          this._ctl({ description: this.pc.localDescription.toJSON(), media: this.localMedia });
+        }
+      } else if (msg.candidate) {
+        try {
+          await this.pc.addIceCandidate(msg.candidate);
+        } catch (err) {
+          if (!this.ignoreOffer) throw err;
+        }
+      }
+    } catch (err) {
+      this.onstate?.(`negotiation error: ${err.message}`);
+    }
+  }
+
+  /**
+   * Puts a local track in a slot ('mic', 'camera' or 'screen'), replaces it, or removes it
+   * with a null track. Renegotiates when the set of tracks changes.
+   */
+  setTrack(slot, track, stream) {
+    const sender = this.senders[slot];
+    if (track && sender) {
+      sender.replaceTrack(track);
+    } else if (track) {
+      this.senders[slot] = this.pc.addTrack(track, stream);
+    } else if (sender) {
+      try {
+        this.pc.removeTrack(sender);
+      } catch {
+        // already gone with the connection
+      }
+      delete this.senders[slot];
+    }
+    if (track) this.localMedia[slot] = stream.id;
+    else delete this.localMedia[slot];
+    this._ctl({ media: this.localMedia });
+  }
+
+  /** Route type and media byte counters, for the call status and the browser tests. */
+  async stats() {
+    const out = { route: 'unknown', audioIn: 0, audioOut: 0, videoIn: 0, videoOut: 0, rtt: null };
+    if (this.closed) return out;
+    const report = await this.pc.getStats();
+    let pairId = null;
+    report.forEach((s) => {
+      if (s.type === 'transport' && s.selectedCandidatePairId) pairId = s.selectedCandidatePairId;
+    });
+    report.forEach((s) => {
+      if (s.type === 'candidate-pair' && (s.id === pairId || (!pairId && s.nominated && s.state === 'succeeded'))) {
+        const local = report.get(s.localCandidateId);
+        const remote = report.get(s.remoteCandidateId);
+        out.route = local?.candidateType === 'relay' || remote?.candidateType === 'relay' ? 'relay' : 'direct';
+        if (s.currentRoundTripTime != null) out.rtt = Math.round(s.currentRoundTripTime * 1000);
+      }
+      if (s.type === 'inbound-rtp') out[s.kind === 'audio' ? 'audioIn' : 'videoIn'] += s.bytesReceived || 0;
+      if (s.type === 'outbound-rtp') out[s.kind === 'audio' ? 'audioOut' : 'videoOut'] += s.bytesSent || 0;
+    });
+    return out;
   }
 
   diagnose(online) {

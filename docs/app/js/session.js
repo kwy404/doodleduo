@@ -5,6 +5,7 @@
 // screen shows six confirmation words that the inviter types back before anything is shared.
 
 import { Board, History } from '../core/crdt.js';
+import { ChatLog } from '../core/chat.js';
 import { Emitter, Mesh, MAX_MEMBERS } from '../core/mesh.js';
 import { RtcLink, buildIceServers } from '../core/rtc.js';
 import { CodeCreator, CodeJoiner, CODE_LIFETIME_MS } from '../core/pairing.js';
@@ -40,6 +41,8 @@ export class Session extends Emitter {
     this.asked = new Set();
     this.pairing = null; // { role, words, nonce, peer, expected, attempts, stage }
     this.saveTimer = 0;
+    this.chat = new ChatLog();
+    this.media = null;
   }
 
   newId() {
@@ -70,6 +73,10 @@ export class Session extends Emitter {
     }
     this.history = new History(this.board);
     this.board.onChange(() => this.saveSoon());
+    this.chat = new ChatLog();
+    const chat = await db.getState(`chat:${id}`);
+    if (chat) this.chat.merge(chat);
+    this.chat.onChange(() => this.saveSoon());
     this.emit('board', this.meta);
     return this.meta;
   }
@@ -94,6 +101,7 @@ export class Session extends Emitter {
     this.meta.updated = Date.now();
     if (thumb) this.meta.thumb = thumb;
     await db.putState(this.meta.id, this.board.toState());
+    await db.putState(`chat:${this.meta.id}`, this.chat.toState());
     await db.putBoard(this.meta);
     this.emit('saved', this.meta);
   }
@@ -200,8 +208,11 @@ export class Session extends Emitter {
     });
     this.mesh = mesh;
     mesh.on('members', () => this.emit('people', this.people));
-    mesh.on('link-open', ({ peerId }) => this._onPeer(peerId));
-    mesh.on('link-close', ({ peerId }) => this.emit('cursor', { id: peerId, gone: true }));
+    mesh.on('link-open', ({ peerId, link }) => this._onPeer(peerId, link));
+    mesh.on('link-close', ({ peerId }) => {
+      this.media?.detach(peerId);
+      this.emit('cursor', { id: peerId, gone: true });
+    });
     mesh.on('message', (m) => this._onMessage(m));
     mesh.on('held', ({ peerId }) => this._onHeld(peerId));
     mesh.on('full', (info) => this.emit('notice', { kind: 'full', ...info }));
@@ -221,9 +232,31 @@ export class Session extends Emitter {
   }
 
   /** A peer is in: send the whole board and say which pictures I have. */
-  _onPeer(peerId) {
+  _onPeer(peerId, link) {
     this.emit('people', this.people);
+    if (link) {
+      // The peer with the larger id gives way when both renegotiate media at once.
+      link.polite = this.profile.id > peerId;
+      this.media?.attach(peerId, link);
+    }
     for (const part of this.board.stateParts()) this.mesh.sendTo(peerId, { type: 'state', board: this.meta.id, state: part });
+    for (const part of chatParts(this.chat.toState())) this.mesh.sendTo(peerId, { type: 'chat-state', board: this.meta.id, state: part });
+  }
+
+  // ---------- Chat ----------
+
+  /** Sends a chat message, optionally as a reply. Returns the message. */
+  say(text, reply = null) {
+    const msg = { id: this.newId(), from: this.profile.id, name: this.profile.name, color: this.profile.color, text, reply, ts: Date.now() };
+    if (!this.chat.add(msg)) return null;
+    this.broadcast({ type: 'chat', board: this.meta.id, msg: this.chat.get(msg.id) });
+    return msg;
+  }
+
+  /** Switches my reaction on a message. */
+  react(msgId, key) {
+    const op = this.chat.toggle(msgId, key, this.profile.id);
+    this.broadcast({ type: 'react', board: this.meta.id, op });
   }
 
   async _onMessage({ from, body }) {
@@ -240,6 +273,18 @@ export class Session extends Emitter {
           return;
         }
         this._askMissing(from);
+        return;
+      case 'chat':
+        if (body.board === this.meta?.id && this.chat.add(body.msg)) this.emit('chat-message', this.chat.get(body.msg?.id));
+        return;
+      case 'react':
+        if (body.board === this.meta?.id) this.chat.react(body.op);
+        return;
+      case 'chat-state':
+        if (body.board === this.meta?.id) this.chat.merge(body.state);
+        return;
+      case 'voice':
+        this.media?.peerState(from, body);
         return;
       case 'cur':
         this.emit('cursor', { id: from, x: Number(body.x), y: Number(body.y), gone: !!body.gone });
@@ -287,7 +332,10 @@ export class Session extends Emitter {
     const link = this.mesh?.links.get(peerId) || this.mesh?.held.get(peerId);
     const local = sdpFingerprints(link?.pc?.localDescription?.sdp).join(',');
     const remote = sdpFingerprints(link?.pc?.remoteDescription?.sdp).join(',');
-    if (!local || !remote) return null;
+    if (!local || !remote) {
+      console.warn('doodleduo: no fingerprints yet', !!link, link?.pc?.signalingState);
+      return null;
+    }
     return confirmWords(local, remote, nonce);
   }
 
@@ -360,7 +408,9 @@ export class Session extends Emitter {
   /** The inviter typed the words on the friend's screen. Returns 'ok', 'wrong' or 'refused'. */
   confirm(words) {
     const p = this.pairing;
-    if (!p || p.role !== 'creator' || p.stage !== 'confirm' || !p.expected) return 'wrong';
+    if (!p || p.role !== 'creator' || p.stage !== 'confirm') return 'wrong';
+    p.expected ??= this._confirmFor(p.peer, p.nonce);
+    if (!p.expected) return 'wrong';
     if (words.join(' ') === p.expected.join(' ')) {
       p.done = true;
       p.stage = 'done';
@@ -455,6 +505,7 @@ export class Session extends Emitter {
   }
 
   _leaveMesh() {
+    this.media?.leave();
     this.flush();
     if (this.mesh) {
       this.mesh.leave();
@@ -462,6 +513,27 @@ export class Session extends Emitter {
       this.emit('people', this.people);
     }
   }
+}
+
+/** Splits a chat state into parts of at most maxChars of JSON. */
+export function chatParts(state, maxChars = 100000) {
+  const parts = [];
+  let cur = { messages: [], reactions: [] };
+  let size = 0;
+  const push = (kind, item) => {
+    const n = JSON.stringify(item).length;
+    if (size + n > maxChars && (cur.messages.length || cur.reactions.length)) {
+      parts.push(cur);
+      cur = { messages: [], reactions: [] };
+      size = 0;
+    }
+    cur[kind].push(item);
+    size += n;
+  };
+  for (const m of state.messages) push('messages', m);
+  for (const r of state.reactions) push('reactions', r);
+  if (cur.messages.length || cur.reactions.length) parts.push(cur);
+  return parts;
 }
 
 export { CODE_LIFETIME_MS, MAX_MEMBERS };

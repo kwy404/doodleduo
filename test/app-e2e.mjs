@@ -6,6 +6,9 @@
 //   3. Bia invites Caio, who joins late and must receive the whole board, pictures included.
 //   4. All three draw and edit at the same time; every replica must end with the same state.
 //   5. Undo by one person, exports and a board file round trip.
+//   6. Chat with a reply and a reaction (the late joiner gets the history), a voice call with
+//      the noise suppression worklet, camera bubbles next to the cursor, screen sharing and
+//      the mic test.
 // The site is served under /doodleduo/, like GitHub Pages.
 //
 // Usage: node test/app-e2e.mjs   (BROWSER may point to a Chromium based browser)
@@ -29,7 +32,9 @@ async function person(name) {
   const page = await context.newPage();
   page.on('pageerror', (e) => errors.push(`${name}: ${e.message}`));
   page.on('console', (m) => {
-    if (m.type() === 'error') errors.push(`${name}: ${m.text()}`);
+    // A public broker that is down shows up as a browser error on its WebSocket; the app
+    // simply uses the other brokers, so that one is not counted.
+    if (m.type() === 'error' && !/WebSocket connection to 'wss:[^']+mqtt' failed/.test(m.text())) errors.push(`${name}: ${m.text()}`);
     if (process.env.E2E_VERBOSE) console.log(`[${name}] ${m.text()}`);
   });
   await page.goto(base, { waitUntil: 'domcontentloaded', timeout: 120000 });
@@ -67,7 +72,12 @@ async function pair(host, guest) {
   await host.page.waitForSelector('#confirm-word-0', { state: 'visible', timeout: 30000 });
   for (let i = 0; i < 6; i++) await host.page.fill(`#confirm-word-${i}`, confirm[i]);
   await host.page.click('#confirm-btn');
-  await guest.page.waitForFunction(() => window.doodleduo.S.pair.stage === 'done', null, { timeout: 30000 });
+  await guest.page.waitForFunction(() => window.doodleduo.S.pair.stage === 'done', null, { timeout: 30000 }).catch(async (err) => {
+    const info = (p) => run(p, () => JSON.stringify({ pair: window.doodleduo.S.pair, attempts: window.doodleduo.session().pairing?.attempts, links: [...(window.doodleduo.session().mesh?.links.keys() || [])], held: [...(window.doodleduo.session().mesh?.held.keys() || [])], expected: window.doodleduo.session().pairing?.expected }));
+    console.log('host', await info(host));
+    console.log('guest', await info(guest));
+    throw err;
+  });
   return words;
 }
 
@@ -184,6 +194,12 @@ try {
   log('Ana and Bia drew and edited the same elements at the same time');
   await converge([ana, bia], 'two people at once');
 
+  await ana.page.click('#chat-btn');
+  await ana.page.fill('#chat-input', 'Bring the big map');
+  await ana.page.press('#chat-input', 'Enter');
+  await bia.page.waitForFunction(() => window.doodleduo.chat().list().some((m) => m.text === 'Bring the big map'), null, { timeout: 15000 });
+  log('Ana wrote in the chat and Bia got it');
+
   const caio = await person('Caio');
   await pair(bia, caio);
   log('Caio joined late through Bia');
@@ -208,6 +224,86 @@ try {
   await run(caio, () => window.doodleduo.undo());
   await run(caio, () => window.doodleduo.undo());
   await converge([ana, bia, caio], 'after Caio undid two steps');
+
+  // Chat: Bia replies, Caio reacts. Caio joined after the first message.
+  const first = await run(ana, () => window.doodleduo.chat().list().find((m) => m.text === 'Bring the big map').id);
+  await caio.page.waitForFunction((id) => !!window.doodleduo.chat().get(id), first, { timeout: 15000 });
+  await bia.page.click('#chat-btn');
+  await bia.page.waitForSelector(`#chat-list .msg[data-id="${first}"]`, { timeout: 10000 });
+  await bia.page.hover(`#chat-list .msg[data-id="${first}"]`);
+  await bia.page.click(`#chat-list .msg[data-id="${first}"] .reply-btn`);
+  await bia.page.fill('#chat-input', 'On it, and snacks too');
+  await bia.page.click('#chat-send');
+  await caio.page.click('#chat-btn');
+  await caio.page.waitForSelector(`#chat-list .msg[data-id="${first}"]`, { timeout: 10000 });
+  await caio.page.hover(`#chat-list .msg[data-id="${first}"]`);
+  await caio.page.click(`#chat-list .msg[data-id="${first}"] [data-react="heart"]`);
+  const chatOk = async (p) =>
+    p.page.waitForFunction(
+      (id) => {
+        const log = window.doodleduo.chat();
+        const reply = log.list().find((m) => m.reply === id);
+        return reply?.text === 'On it, and snacks too' && log.reactionsOf(id).some((r) => r.key === 'heart' && r.count === 1);
+      },
+      first,
+      { timeout: 15000 },
+    );
+  await Promise.all([chatOk(ana), chatOk(bia), chatOk(caio)]);
+  const chats = await Promise.all([ana, bia, caio].map((p) => run(p, () => window.doodleduo.chat().fingerprint())));
+  ok(chats.every((c) => c === chats[0]), 'every chat log is identical');
+  ok(await ana.page.locator('#chat-list .msg-quote b', { hasText: 'Ana' }).filter({ visible: true }).count(), 'the reply shows the message it answers');
+  ok(await ana.page.locator(`#chat-list .msg[data-id="${first}"] .reaction[data-key="heart"]`).isVisible(), 'the reaction shows under the message');
+  log('a reply and a reaction reached everyone, and the late joiner got the chat history');
+  for (const p of [ana, bia, caio]) await p.page.click('#chat-btn');
+
+  // Voice: Ana and Bia join the call. Audio must flow, through the noise suppression worklet.
+  const anaId = await run(ana, () => window.doodleduo.session().profile.id);
+  const biaId = await run(bia, () => window.doodleduo.session().profile.id);
+  await ana.page.click('#call-btn');
+  await bia.page.click('#call-btn');
+  await bia.page.waitForFunction(() => window.doodleduo.S.call.in && window.doodleduo.S.call.count === 2, null, { timeout: 20000 });
+  ok((await run(ana, () => window.doodleduo.media.processing)) === 'strong', 'the microphone runs through the Strong noise suppression worklet');
+  const audioIn = (p, from) => run(p, async (id) => (await window.doodleduo.session().mesh.links.get(id).stats()).audioIn, from);
+  let a0 = 0;
+  let a1 = 0;
+  for (let i = 0; i < 20 && a1 <= a0; i++) {
+    a0 = await audioIn(bia, anaId);
+    await bia.page.waitForTimeout(1000);
+    a1 = await audioIn(bia, anaId);
+  }
+  ok(a1 > a0 && a0 >= 0, `Bia receives Ana's voice (${a0} then ${a1} bytes)`);
+  log(`voice call: audio flows from Ana to Bia (${a1 - a0} bytes in a second), Strong noise suppression on`);
+
+  // Camera: Ana's bubble floats next to her cursor on Bia's screen.
+  await ana.page.click('#camera-btn');
+  await bia.page.waitForFunction((id) => {
+    const v = document.querySelector(`#cursors .peer-cursor[data-peer="${id}"] video.cam-bubble`);
+    return v && v.videoWidth > 0;
+  }, anaId, { timeout: 30000 });
+  ok(await ana.page.locator('#self-cam').isVisible(), 'Ana sees her own camera bubble');
+  await bia.page.click('#bubbles-btn');
+  ok(!(await bia.page.locator('#cursors video.cam-bubble').isVisible()), 'camera bubbles can be hidden');
+  await bia.page.click('#bubbles-btn');
+  log('camera bubble of Ana floats next to her cursor on the screen of Bia, and can be hidden');
+
+  // Screen: Bia shares, Ana watches.
+  await bia.page.click('#screen-btn');
+  await ana.page.waitForFunction((id) => window.doodleduo.S.screenFrom === id && document.getElementById('screen-video').videoWidth > 0, biaId, { timeout: 30000 });
+  log('Bia shares her screen and Ana sees it');
+  await bia.page.click('#screen-btn');
+  await ana.page.waitForFunction(() => !window.doodleduo.S.screenFrom, null, { timeout: 20000 });
+
+  // Mic test on Caio, in the settings.
+  await caio.page.click('#settings-btn');
+  await caio.page.click('#mic-test-btn');
+  await caio.page.waitForFunction(() => window.doodleduo.S.testing && window.doodleduo.media.micLevel && window.doodleduo.S.micLevel > 0, null, { timeout: 20000 });
+  await caio.page.click('#mic-test-btn');
+  await caio.page.keyboard.press('Escape');
+  log('the mic test plays back and shows a level, with the suppressor reporting');
+
+  await ana.page.click('#hangup-btn');
+  await bia.page.waitForFunction(() => window.doodleduo.S.call.count === 1, null, { timeout: 15000 });
+  log('Ana left the call');
 
   const [png] = await Promise.all([ana.page.waitForEvent('download'), run(ana, () => window.doodleduo.S && document.querySelector('#export-png').click())]);
   ok((await png.suggestedFilename()).endsWith('.png'), 'PNG export downloads');

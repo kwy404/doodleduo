@@ -2,14 +2,17 @@
 // works the same at the site root or under a sub-path such as /doodleduo/app/.
 
 // precache:start
-const CACHE_VERSION = '3aa4671dc876';
+const CACHE_VERSION = 'd740f6ab9b00';
 const PRECACHE = [
   './',
   'app.css',
   'core/blobs.js',
   'core/bytes.js',
+  'core/call.js',
+  'core/chat.js',
   'core/crdt.js',
   'core/crypto.js',
+  'core/dsp.js',
   'core/format.js',
   'core/geometry.js',
   'core/invite.js',
@@ -35,10 +38,12 @@ const PRECACHE = [
   'index.html',
   'js/canvas.js',
   'js/db.js',
+  'js/denoise-worklet.js',
   'js/exporter.js',
   'js/i18n.js',
   'js/images.js',
   'js/main.js',
+  'js/media.js',
   'js/session.js',
   'js/words-ui.js',
   'manifest.webmanifest',

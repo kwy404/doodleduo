@@ -15,4 +15,8 @@ export default [
       'no-control-regex': 'off',
     },
   },
+  {
+    files: ['docs/app/js/denoise-worklet.js'],
+    languageOptions: { globals: { AudioWorkletProcessor: 'readonly', registerProcessor: 'readonly', sampleRate: 'readonly' } },
+  },
 ];
