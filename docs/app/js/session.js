@@ -1,8 +1,9 @@
 // One open board and the people drawing on it. Local edits become CRDT operations that go to
 // every peer through the mesh (batched every 40 ms); a peer who connects gets the whole board in
 // small parts and asks for the pictures it lacks. Pairing uses six words through public relays:
-// the inviter shows the words and a QR code, the friend types or scans them, then the friend's
-// screen shows six confirmation words that the inviter types back before anything is shared.
+// the inviter shows the words, a QR code and an invite link that all carry the same words, the
+// friend types, scans or opens them, then the friend's screen shows six confirmation words that
+// the inviter types back before anything is shared.
 
 import { Board, History } from '../core/crdt.js';
 import { ChatLog } from '../core/chat.js';
@@ -339,7 +340,7 @@ export class Session extends Emitter {
     return confirmWords(local, remote, nonce);
   }
 
-  /** Starts an invite: six words and a QR code. Emits 'pairing' as it moves along. */
+  /** Starts an invite: six words, an invite link and a QR code of that link. Emits 'pairing' as it moves along. */
   async invite(appUrl) {
     this.stopPairing();
     const mesh = this._ensureMesh(true);
@@ -382,8 +383,9 @@ export class Session extends Emitter {
       if (this.pairing !== pairing) return null;
       pairing.words = words;
       pairing.expires = creator.expires;
-      const link = wordsLink(appUrl, words);
-      pairing.qr = qrSvg(encodeQR(link, { ecl: 'M' }), { margin: 2, dark: '#101317', light: '#f4f2ec', title: 'QR code with the six words' });
+      // The link carries the same six words in its hash, and the QR code carries the link.
+      pairing.link = wordsLink(appUrl, words);
+      pairing.qr = qrSvg(encodeQR(pairing.link, { ecl: 'M' }), { margin: 2, dark: '#101317', light: '#f4f2ec', title: 'QR code with the invite link' });
       pairing.stage = 'waiting';
       this.emit('pairing', pairing);
       return pairing;

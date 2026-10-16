@@ -63,7 +63,7 @@ const S = V.reactive({
   people: [],
   connected: false,
   dlg: '',
-  pair: { role: '', stage: '', words: [], qr: '', left: '', relays: 0, relaysTotal: 0, peerName: '', expected: [], reason: '', tries: 3 },
+  pair: { role: '', stage: '', words: [], qr: '', link: '', copied: false, left: '', relays: 0, relaysTotal: 0, peerName: '', expected: [], reason: '', tries: 3 },
   boards: [],
   sure: '',
   stun: { checked: false, ok: true, results: [] },
@@ -88,6 +88,11 @@ const S = V.reactive({
   screenBig: false,
   noiseMode: pref('noise', 'strong'),
   sensitivity: pref('sensitivity', 50),
+  micId: pref('mic', ''),
+  camId: pref('cam', ''),
+  outId: pref('speaker', ''),
+  devices: { mic: [], cam: [], out: [] },
+  canPickSpeaker: false,
   testing: false,
   micLevel: 0,
   micGate: false,
@@ -111,9 +116,30 @@ const media = new MediaManager({
   set sensitivity(v) {
     S.sensitivity = v;
   },
+  get micId() {
+    return S.micId;
+  },
+  set micId(v) {
+    S.micId = v;
+  },
+  get camId() {
+    return S.camId;
+  },
+  set camId(v) {
+    S.camId = v;
+  },
+  get outId() {
+    return S.outId;
+  },
+  set outId(v) {
+    S.outId = v;
+  },
   save() {
     setPref('noise', S.noiseMode);
     setPref('sensitivity', S.sensitivity);
+    setPref('mic', S.micId);
+    setPref('cam', S.camId);
+    setPref('speaker', S.outId);
   },
 });
 let installEvent = null;
@@ -481,7 +507,7 @@ let countdown = 0;
 
 function syncPair(p) {
   if (!p) {
-    S.pair = { role: '', stage: '', words: [], qr: '', left: '', relays: 0, relaysTotal: 0, peerName: '', expected: [], reason: '', tries: 3 };
+    S.pair = { role: '', stage: '', words: [], qr: '', link: '', copied: false, left: '', relays: 0, relaysTotal: 0, peerName: '', expected: [], reason: '', tries: 3 };
     return;
   }
   Object.assign(S.pair, {
@@ -489,6 +515,7 @@ function syncPair(p) {
     stage: p.stage,
     words: p.words || [],
     qr: p.qr || '',
+    link: p.link || '',
     relays: p.relays || 0,
     relaysTotal: p.relaysTotal || 0,
     peerName: p.peerName || '',
@@ -516,6 +543,8 @@ function syncPair(p) {
 async function invite() {
   if (!S.name) return (S.dlg = 'welcome');
   S.dlg = 'invite';
+  // Forget the words and the link of an earlier invite before the new ones arrive.
+  syncPair(null);
   S.pair.confirmShown = false;
   clearInterval(countdown);
   const p = await session.invite(new URL('./', location.href).href);
@@ -568,6 +597,36 @@ function confirmTyped() {
   if (out === 'wrong') {
     confirmInputs.setError();
     S.pair.tries = 3 - (session.pairing?.attempts || 0);
+  }
+}
+
+/** Joins with the words in the address bar hash (#join=...), then removes them from it. */
+function joinFromHash() {
+  const fromLink = wordsFromLink(location.hash);
+  if (!fromLink) return;
+  history.replaceState(null, '', location.pathname + location.search);
+  const res = resolvePhrase(fromLink);
+  if (res.ok) openJoin(res.words);
+  else toast(t('words.incomplete'), 'warning');
+}
+
+async function copyInvite() {
+  const link = S.pair.link;
+  if (!link) return;
+  let done = false;
+  try {
+    await navigator.clipboard.writeText(link);
+    done = true;
+  } catch {
+    // No clipboard permission: select the link so the person can copy it by hand.
+    const field = $('#invite-link');
+    field?.focus();
+    field?.select();
+  }
+  if (done) {
+    S.pair.copied = true;
+    toast(t('invite.copied'), 'success');
+    setTimeout(() => (S.pair.copied = false), 2000);
   }
 }
 
@@ -720,7 +779,10 @@ function syncCall() {
 
 function renderPeople() {
   const speaking = media.speaking;
-  S.people = session.people.map((p) => ({ ...p, call: p.me ? media.inCall : !!media.peers.get(p.id)?.call, speaking: speaking.has(p.me ? 'self' : p.id) }));
+  S.people = session.people.map((p) => {
+    const peer = p.me ? media.state : media.peers.get(p.id);
+    return { ...p, call: !!peer?.call, muted: !!peer?.call && !!peer?.muted, speaking: speaking.has(p.me ? 'self' : p.id) };
+  });
 }
 
 function renderVideo() {
@@ -787,6 +849,7 @@ function dock(c, id) {
 async function joinCall() {
   await media.join();
   syncCall();
+  refreshDevices();
 }
 
 function mediaError(code) {
@@ -803,6 +866,15 @@ async function toggleMicTest() {
     }
   }
   S.testing = media.testing;
+  refreshDevices();
+}
+
+/** Fills the device pickers. Names show once the browser has granted the mic or the camera. */
+async function refreshDevices() {
+  const d = await media.devices();
+  const named = (list, key) => list.map((x, i) => ({ id: x.id, label: x.label || t(key, { n: i + 1 }) }));
+  S.devices = { mic: named(d.audioinput, 'devices.micN'), cam: named(d.videoinput, 'devices.camN'), out: named(d.audiooutput, 'devices.outN') };
+  S.canPickSpeaker = media.canPickSpeaker && d.audiooutput.length > 0;
 }
 
 // ---------- Settings ----------
@@ -812,6 +884,7 @@ function saveProfile() {
   setPref('name', S.name);
   setPref('color', S.me);
   session.setProfile({ name: S.name || t('people.you'), color: S.me });
+  renderPeople();
 }
 
 function setLang(lang) {
@@ -949,6 +1022,7 @@ async function start() {
   media.on('video', renderVideo);
   media.on('speaking', renderPeople);
   media.on('error', mediaError);
+  media.on('devices', refreshDevices);
   media.on('levels', () => {
     if (!media.testing) return;
     S.micLevel = Math.min(100, Math.round(media.level('test') * 400));
@@ -1001,13 +1075,10 @@ async function start() {
   const known = last ? await db.getBoard(last) : null;
   await openBoard(known ? last : newBoardId(), known ? null : t('board.first'));
 
-  // Six words carried by a scanned QR code: join right away, then forget the words.
-  const fromLink = wordsFromLink(location.hash);
-  if (fromLink) {
-    history.replaceState(null, '', location.pathname + location.search);
-    const res = resolvePhrase(fromLink);
-    if (res.ok) openJoin(res.words);
-  }
+  // An invite link (opened, or scanned from the QR code) carries the six words in its hash:
+  // clear it from the address bar, then join right away.
+  joinFromHash();
+  addEventListener('hashchange', joinFromHash);
   if (!pref('welcomed', false) && S.dlg !== 'join') S.dlg = 'welcome';
 
   document.addEventListener('keydown', onKey);
@@ -1111,6 +1182,7 @@ async function start() {
     undo,
     redo,
     media,
+    leave: leaveBoard,
     chat: () => session.chat,
   };
 }
@@ -1136,12 +1208,16 @@ Object.assign(V.config.globals, {
   fit: () => view.fit(),
   resetZoom: () => view.setZoom(1),
   invite,
+  copyInvite,
   openJoin: () => openJoin(),
   startJoin,
   confirmTyped,
   closeDialog,
   leaveBoard,
-  openDialog: (name) => (S.dlg = name),
+  openDialog: (name) => {
+    S.dlg = name;
+    if (name === 'settings') refreshDevices();
+  },
   newBoard,
   openFromList,
   deleteBoard,
@@ -1174,6 +1250,9 @@ Object.assign(V.config.globals, {
   toggleBubbles: () => (S.bubbles = !S.bubbles),
   toggleScreenSize: () => (S.screenBig = !S.screenBig),
   setNoise: (mode) => media.setNoiseMode(mode),
+  setMic: (id) => media.setMic(id).then(refreshDevices),
+  setCamera: (id) => media.setCamera(id).then(refreshDevices),
+  setSpeaker: (id) => media.setSpeaker(id),
   setSensitivity: (v) => media.setSensitivity(Number(v)),
   toggleMicTest,
 });

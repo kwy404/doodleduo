@@ -96,13 +96,15 @@ describe('confirmation words', () => {
   });
 });
 
-describe('pairing link', () => {
-  it('carries the words in the fragment and keeps the QR small', async () => {
+describe('invite link', () => {
+  it('carries the words in the hash and keeps the QR small', async () => {
     const { encodeQR: encodeQr } = await import('../src/qr.js');
     const words = ['abandon', 'ability', 'able', 'about', 'above', 'absent'];
     const link = wordsLink('https://kwy404.github.io/doodleduo/app/#old', words);
-    expect(link).toBe('https://kwy404.github.io/doodleduo/app/#w=abandon-ability-able-about-above-absent');
+    expect(link).toBe('https://kwy404.github.io/doodleduo/app/#join=abandon-ability-able-about-above-absent');
     expect(wordsFromLink(link)).toEqual(words);
+    expect(wordsFromLink('#join=abandon-ability-able-about-above-absent')).toEqual(words);
+    expect(wordsFromLink('https://example.test/app/?join=abandon-ability')).toBeNull();
     expect(wordsFromLink('nothing here')).toBeNull();
     // The longest possible words still fit a small, easy to scan code.
     const longest = [...WORDLIST].sort((a, b) => b.length - a.length).slice(0, 6);

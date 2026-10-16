@@ -1,8 +1,10 @@
-// Six word inputs with autocomplete from the word list, paste of a whole phrase into any box,
-// the first four letters accepted, single typos fixed and a clear state per word.
+// Six word inputs with autocomplete from the word list, a whole phrase or an invite link
+// pasted into any box spread one word per box (phone keyboards paste through an input event
+// with no paste event, so both paths share spread()), the first four letters accepted, single
+// typos fixed and a clear state per word.
 
 import { WORDLIST } from '../core/wordlist.js';
-import { WORD_COUNT, normalizeWord, resolvePhrase, resolveWord, splitPhrase, suggestWords } from '../core/words.js';
+import { WORD_COUNT, normalizeWord, resolvePhrase, resolveWord, splitPhrase, suggestWords, wordsFromLink } from '../core/words.js';
 import { t } from './i18n.js';
 
 function el(tag, attrs = {}, ...kids) {
@@ -53,16 +55,11 @@ export function wordInputs(container, { idPrefix, onReady, onChange } = {}) {
     hints.push(hint);
 
     input.addEventListener('paste', (e) => {
-      const parts = splitPhrase(e.clipboardData?.getData('text') ?? '');
-      if (parts.length < 2) return;
-      e.preventDefault();
-      const start = parts.length >= WORD_COUNT ? 0 : i;
-      parts.slice(0, WORD_COUNT - start).forEach((p, k) => (inputs[start + k].value = p));
-      update();
-      const next = inputs.find((x) => !resolveWord(x.value));
-      (next ?? inputs[WORD_COUNT - 1]).focus();
+      if (spread(i, e.clipboardData?.getData('text') ?? '')) e.preventDefault();
     });
     input.addEventListener('input', (e) => {
+      // Text with a separator in one box (a paste from a phone keyboard, or a typed phrase).
+      if (/[^A-Za-zÀ-ɏ]/.test(input.value.trim()) && spread(i, input.value)) return;
       update();
       if (e.inputType && !e.inputType.startsWith('insert')) return;
       const raw = normalizeWord(input.value);
@@ -90,6 +87,26 @@ export function wordInputs(container, { idPrefix, onReady, onChange } = {}) {
     });
   }
   container.replaceChildren(grid);
+
+  // Puts a pasted phrase, share text or invite link into the boxes, one word per box, starting
+  // at the first box for a whole phrase. Returns false when the text holds a single word.
+  function spread(i, text) {
+    let parts = wordsFromLink(text) || splitPhrase(text);
+    if (parts.length < 2) return false;
+    if (parts.length > WORD_COUNT) {
+      // A share text with a label around the words: keep only the exact list words.
+      const known = parts.filter((p) => resolveWord(p)?.how === 'exact');
+      if (known.length >= WORD_COUNT) parts = known.slice(-WORD_COUNT);
+    }
+    const start = parts.length >= WORD_COUNT ? 0 : i;
+    inputs[i].value = '';
+    parts.slice(0, WORD_COUNT - start).forEach((p, k) => (inputs[start + k].value = p));
+    update();
+    (inputs.find((x) => !resolveWord(x.value)) ?? inputs[WORD_COUNT - 1]).focus();
+    const res = resolvePhrase(inputs.map((x) => x.value));
+    if (res.ok) onReady?.(res.words);
+    return true;
+  }
 
   function update() {
     let ok = 0;

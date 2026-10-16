@@ -29,7 +29,7 @@
     </div>
     <div class="topbar-side topbar-end">
       <div class="people" :aria-label="t('people.label')" role="list">
-        <span v-for="p in S.people" :key="p.id" role="listitem" class="person" :class="{ 'in-call': p.call, 'is-speaking': p.speaking }" :style="{ '--c': p.color }" :title="p.me ? p.name + ' (' + t('people.you') + ')' : p.name" v-text="initial(p.name)"></span>
+        <span v-for="p in S.people" :key="p.id" role="listitem" class="person" :class="{ 'in-call': p.call, 'is-speaking': p.speaking, 'is-muted': p.muted }" :data-peer="p.id" :style="{ '--c': p.color }" :title="(p.me ? p.name + ' (' + t('people.you') + ')' : p.name) + (p.muted ? ', ' + t('call.mutedNote') : '')" v-text="initial(p.name)"></span>
       </div>
       <span class="badge badge-soft live-badge" v-show="S.connected"><span class="live-dot" aria-hidden="true"></span><span v-text="t('people.live', { n: S.people.length })"></span></span>
       <button id="call-btn" type="button" class="btn btn-ghost btn-square btn-sm" v-show="S.connected && !S.call.in" @click="joinCall()" :aria-label="t('top.call')" :title="t('top.call')"><svg class="ic" aria-hidden="true"><use href="icons.svg#i-call"/></svg></button>
@@ -143,7 +143,7 @@
   </main>
 </div>
 
-<!-- Invite: six words and a QR code, then the confirmation words typed back. -->
+<!-- Invite: six words, a QR code and a link that carry the same words, then the confirmation words typed back. -->
 <dialog data-dlg="invite" id="invite-dialog" class="modal" aria-labelledby="invite-title">
   <div class="modal-box pair-box">
     <button type="button" class="modal-close" @click="closeDialog()" :aria-label="t('dlg.close')"></button>
@@ -162,6 +162,14 @@
           <div class="qr" v-html="S.pair.qr"></div>
           <p class="qr-cap" v-text="t('invite.qr')">Scan with a phone camera</p>
         </div>
+      </div>
+      <div class="invite-link">
+        <label class="field-label" for="invite-link" v-text="t('invite.link')">Or send this link</label>
+        <div class="link-row">
+          <input id="invite-link" class="input input-sm" type="text" readonly :value="S.pair.link" @focus="$event.target.select()" spellcheck="false">
+          <button id="invite-copy" type="button" class="btn btn-outline btn-sm" @click="copyInvite()"><svg class="ic" aria-hidden="true"><use :href="'icons.svg#i-' + (S.pair.copied ? 'check' : 'duplicate')"/></svg><span v-text="S.pair.copied ? t('invite.copiedShort') : t('invite.copy')">Copy</span></button>
+        </div>
+        <p class="link-note" v-text="t('invite.linkNote')"></p>
       </div>
       <p class="pair-meta"><span v-text="t('invite.expires', { left: S.pair.left })"></span><span aria-hidden="true"> &middot; </span><span v-text="t('pair.relays', { n: S.pair.relays, total: S.pair.relaysTotal })"></span></p>
     </div>
@@ -264,6 +272,12 @@
       </div>
       <div class="field"><span class="field-label" v-text="t('settings.theme')">Theme</span>
         <div class="segmented" role="radiogroup"><label class="segmented-item"><input type="radio" name="theme" :checked="S.theme === 'dark'" @change="setTheme('dark')"> <span v-text="t('settings.dark')">Night slate</span></label><label class="segmented-item"><input type="radio" name="theme" :checked="S.theme === 'light'" @change="setTheme('light')"> <span v-text="t('settings.light')">Calm light</span></label></div>
+      </div>
+      <div class="field devices"><span class="field-label" v-text="t('devices.title')">Microphone, camera and speaker</span>
+        <label class="device-row"><svg class="ic" aria-hidden="true"><use href="icons.svg#i-mic"/></svg><span class="sr-only" v-text="t('devices.mic')">Microphone</span><select id="mic-select" class="select" v-model="S.micId" @change="setMic($event.target.value)"><option value="" v-text="t('devices.default')">System default</option><option v-for="d in S.devices.mic" :key="d.id" :value="d.id" v-text="d.label"></option></select></label>
+        <label class="device-row"><svg class="ic" aria-hidden="true"><use href="icons.svg#i-camera"/></svg><span class="sr-only" v-text="t('devices.cam')">Camera</span><select id="cam-select" class="select" v-model="S.camId" @change="setCamera($event.target.value)"><option value="" v-text="t('devices.default')">System default</option><option v-for="d in S.devices.cam" :key="d.id" :value="d.id" v-text="d.label"></option></select></label>
+        <label class="device-row" v-show="S.canPickSpeaker"><svg class="ic" aria-hidden="true"><use href="icons.svg#i-call"/></svg><span class="sr-only" v-text="t('devices.out')">Speaker</span><select id="out-select" class="select" v-model="S.outId" @change="setSpeaker($event.target.value)"><option value="" v-text="t('devices.default')">System default</option><option v-for="d in S.devices.out" :key="d.id" :value="d.id" v-text="d.label"></option></select></label>
+        <p class="text-sm text-muted-foreground" v-text="t('devices.hint')"></p>
       </div>
       <div class="field"><span class="field-label" v-text="t('settings.noise')">Noise suppression</span>
         <div class="segmented" role="radiogroup"><label class="segmented-item"><input type="radio" name="noise" :checked="S.noiseMode === 'strong'" @change="setNoise('strong')"> <span v-text="t('noise.strong')">Strong</span></label><label class="segmented-item"><input type="radio" name="noise" :checked="S.noiseMode === 'standard'" @change="setNoise('standard')"> <span v-text="t('noise.standard')">Standard</span></label><label class="segmented-item"><input type="radio" name="noise" :checked="S.noiseMode === 'off'" @change="setNoise('off')"> <span v-text="t('noise.off')">Off</span></label></div>

@@ -282,8 +282,12 @@ export class RtcLink {
   setTrack(slot, track, stream) {
     const sender = this.senders[slot];
     if (track && sender) {
+      // Same sender, new device: the other side keeps the same track and the stream it first
+      // arrived with, so the media map must keep naming that stream.
       sender.replaceTrack(track);
-    } else if (track) {
+      return;
+    }
+    if (track) {
       this.senders[slot] = this.pc.addTrack(track, stream);
     } else if (sender) {
       try {

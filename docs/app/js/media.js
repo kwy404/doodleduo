@@ -11,7 +11,7 @@ const SPEAK_LEVEL = 0.018;
 const SPEAK_HOLD = 280;
 
 export class MediaManager extends Emitter {
-  /** settings: { noiseMode, sensitivity (0 to 100), save() } */
+  /** settings: { noiseMode, sensitivity (0 to 100), micId, camId, outId, save() } */
   constructor(settings) {
     super();
     this.settings = settings;
@@ -32,6 +32,7 @@ export class MediaManager extends Emitter {
     this.sink.hidden = true;
     document.body.append(this.sink);
     setInterval(() => this._measure(), 90);
+    navigator.mediaDevices?.addEventListener?.('devicechange', () => this.emit('devices'));
   }
 
   /** The session whose mesh carries the media. */
@@ -68,12 +69,25 @@ export class MediaManager extends Emitter {
 
   _constraints() {
     const supported = navigator.mediaDevices?.getSupportedConstraints?.() || {};
-    return micConstraints({ noiseMode: this.noiseMode, supported });
+    return micConstraints({ noiseMode: this.noiseMode, supported, inputId: this.settings.micId || '' });
+  }
+
+  /** getUserMedia with the picked device, falling back to the default one when it is gone. */
+  async _open(kind, constraints, id) {
+    if (!id) return navigator.mediaDevices.getUserMedia({ [kind]: constraints });
+    try {
+      return await navigator.mediaDevices.getUserMedia({ [kind]: { ...constraints, deviceId: { exact: id } } });
+    } catch (err) {
+      if (err.name !== 'OverconstrainedError' && err.name !== 'NotFoundError') throw err;
+      const rest = { ...constraints };
+      delete rest.deviceId;
+      return navigator.mediaDevices.getUserMedia({ [kind]: rest });
+    }
   }
 
   /** Opens the microphone, through the worklet in Strong mode. Returns { raw, out, chain }. */
   async _openPipe() {
-    const raw = await navigator.mediaDevices.getUserMedia({ audio: this._constraints() });
+    const raw = await this._open('audio', this._constraints(), this.settings.micId);
     for (const track of raw.getAudioTracks()) if ('contentHint' in track) track.contentHint = 'speech';
     if (!usesDenoise({ noiseMode: this.noiseMode }) || !this.ctx?.audioWorklet || typeof AudioWorkletNode === 'undefined') return { raw, out: raw, chain: null };
     try {
@@ -137,6 +151,7 @@ export class MediaManager extends Emitter {
     el.autoplay = true;
     el.srcObject = pipe.out;
     this.sink.append(el);
+    this._sink(el);
     el.play().catch(() => {});
     pipe.el = el;
     // The bar shows what the microphone picks up; the gate label shows what the suppressor lets through.
@@ -224,13 +239,80 @@ export class MediaManager extends Emitter {
       this.camera = null;
     } else {
       try {
-        this.camera = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 320 }, height: { ideal: 320 }, frameRate: { ideal: 24 } } });
+        this.camera = await this._openCamera();
       } catch (err) {
         this.emit('error', err.name === 'NotAllowedError' ? 'camera-denied' : 'camera-failed');
         return;
       }
     }
     this._refresh();
+  }
+
+  _openCamera() {
+    return this._open('video', { width: { ideal: 320 }, height: { ideal: 320 }, frameRate: { ideal: 24 } }, this.settings.camId);
+  }
+
+  // ---------- Devices ----------
+
+  /** The microphones, cameras and speakers this browser lists. Labels need a granted permission. */
+  async devices() {
+    const out = { audioinput: [], videoinput: [], audiooutput: [] };
+    try {
+      for (const d of await navigator.mediaDevices.enumerateDevices()) if (out[d.kind] && d.deviceId) out[d.kind].push({ id: d.deviceId, label: d.label });
+    } catch {
+      // no media devices API here
+    }
+    return out;
+  }
+
+  /** Whether this browser can send call audio to a chosen speaker. */
+  get canPickSpeaker() {
+    return typeof HTMLMediaElement !== 'undefined' && 'setSinkId' in HTMLMediaElement.prototype;
+  }
+
+  /** The microphone in use right now, as a device id. */
+  get micDevice() {
+    const pipe = this.pipe || this.testPipe;
+    return pipe?.raw.getAudioTracks()[0]?.getSettings().deviceId || '';
+  }
+
+  /** The camera in use right now, as a device id. */
+  get camDevice() {
+    return this.camera?.getVideoTracks()[0]?.getSettings().deviceId || '';
+  }
+
+  async setMic(id) {
+    this.settings.micId = id || '';
+    this.settings.save();
+    await this.restartMic();
+    this.emit('change');
+  }
+
+  async setCamera(id) {
+    this.settings.camId = id || '';
+    this.settings.save();
+    if (!this.camera) return;
+    let next;
+    try {
+      next = await this._openCamera();
+    } catch (err) {
+      this.emit('error', err.name === 'NotAllowedError' ? 'camera-denied' : 'camera-failed');
+      return;
+    }
+    this._stop(this.camera);
+    this.camera = next;
+    this._refresh();
+  }
+
+  async setSpeaker(id) {
+    this.settings.outId = id || '';
+    this.settings.save();
+    for (const el of this.sink.querySelectorAll('audio')) await this._sink(el);
+  }
+
+  async _sink(el) {
+    if (!this.canPickSpeaker) return;
+    await el.setSinkId(this.settings.outId || '').catch(() => {});
   }
 
   async toggleScreen() {
@@ -328,6 +410,7 @@ export class MediaManager extends Emitter {
     el.autoplay = true;
     el.srcObject = stream;
     this.sink.append(el);
+    this._sink(el);
     el.play().catch(() => this.emit('error', 'autoplay'));
     entry.audio.set(stream.id, el);
     this._meter(peerId, stream);
