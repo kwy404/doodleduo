@@ -139,7 +139,8 @@ export class MediaManager extends Emitter {
     this.sink.append(el);
     el.play().catch(() => {});
     pipe.el = el;
-    this._meter('test', pipe.out);
+    // The bar shows what the microphone picks up; the gate label shows what the suppressor lets through.
+    this._meter('test', pipe.raw);
     this.emit('change');
   }
 

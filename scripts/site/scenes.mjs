@@ -152,3 +152,10 @@ ${swatch(1000, 1068, CAST.mabel.base, 'Mabel butter')}${swatch(1190, 1068, CAST.
 ${finish(W, H, pal, p, 0, true)}`;
   return svg(W, H, body, { title: 'Character sheet of Mabel and Otto: front and three quarter views, expressions, props and palette' });
 }
+
+/** One duck on its own, for the landing page where they walk in separately. */
+export function single(who) {
+  const p = who === 'mabel' ? 'sm' : 'so';
+  const body = `<defs>${sharedDefs(p)}</defs>${duck(who, { x: 50, y: 10, s: 1.2, flip: true, defs: p })}`;
+  return svg(330, 320, body, { title: who === 'mabel' ? 'Mabel, the bold duck, with her chalk' : 'Otto, the calm duck, with his crayon' });
+}

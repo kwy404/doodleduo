@@ -17,6 +17,7 @@ Toque em **Convidar amigos**, leia seis palavras para um amigo (ou deixe ele ler
 - Caneta suave que respeita a pressão, marca-texto, borracha, formas, setas e texto.
 - Notas adesivas e imagens coladas ou arrastadas, comprimidas e enviadas a todos.
 - Cursores ao vivo com cor e nome de cada pessoa.
+- Conversa com respostas e reações, chamada de voz com supressão de ruído forte e teste de microfone, bolhas de câmera ao lado de cada cursor e compartilhamento de tela.
 - Selecionar, mover, redimensionar e duplicar. Desfazer e refazer por pessoa.
 - Edições que se juntam: um CRDT mantém todas as cópias do quadro iguais.
 - Quadros salvos no IndexedDB. Exporte PNG, SVG ou um arquivo do quadro.

@@ -9,7 +9,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { duck as fullDuck, sharedDefs } from './duck.mjs';
-import { banner, characterSheet, hero, mascot } from './scenes.mjs';
+import { banner, characterSheet, hero, mascot, single } from './scenes.mjs';
 
 export const PAL = {
   dark: {
@@ -269,7 +269,7 @@ export function build(root = '.') {
   }
   out.push(['docs/favicon.svg', head('dark', { tile: true })], ['docs/app/icons/icon.svg', appIcon()], ['docs/app/icons/maskable.svg', appIcon({ maskable: true })]);
   out.push(['docs/assets/icons.svg', iconSprite()], ['docs/app/icons.svg', iconSprite()]);
-  out.push(['assets/brand/character-sheet.svg', characterSheet()], ['docs/assets/hero.svg', hero('dark')], ['docs/assets/hero-light.svg', hero('light')]);
+  out.push(['assets/brand/character-sheet.svg', characterSheet()], ['docs/assets/hero.svg', hero('dark')], ['docs/assets/hero-light.svg', hero('light')], ['docs/assets/mabel.svg', single('mabel')], ['docs/assets/otto.svg', single('otto')]);
   for (const [file, text] of out) write(join(root, file), text);
   return out.length;
 }

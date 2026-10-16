@@ -54,7 +54,7 @@
       <button id="hangup-btn" type="button" class="tool-btn hangup" @click="leaveCall()" :aria-label="t('call.leave')" :title="t('call.leave')"><svg class="ic" aria-hidden="true"><use href="icons.svg#i-hangup"/></svg></button>
     </div>
 
-    <video id="self-cam" class="self-cam" muted autoplay playsinline v-show="S.call.camera" v-ignore></video>
+    <video id="self-cam" class="self-cam" muted autoplay playsinline v-show="S.call.camera"></video>
 
     <section class="panel screen-panel" id="screen-panel" v-show="S.screenFrom" :class="{ 'is-big': S.screenBig }" :aria-label="t('screen.label')">
       <header class="screen-head"><svg class="ic" aria-hidden="true"><use href="icons.svg#i-screen"/></svg><span v-text="t('screen.from', { name: S.screenName })"></span><button type="button" class="btn btn-ghost btn-square btn-xs" @click="toggleScreenSize()" :aria-label="t('screen.size')" :title="t('screen.size')"><svg class="ic" aria-hidden="true"><use :href="'icons.svg#i-' + (S.screenBig ? 'minimize' : 'maximize')"/></svg></button></header>

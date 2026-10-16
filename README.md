@@ -10,7 +10,7 @@
 <p align="center">An infinite whiteboard you draw on together with friends at the same time, peer to peer in the browser.<br>
 <a href="https://kwy404.github.io/doodleduo/">Website</a> &middot; <a href="https://kwy404.github.io/doodleduo/app/">Open the app</a> &middot; <a href="i18n/README.pt-BR.md">Leia em português</a></p>
 
-Press **Invite friends**, read six words to a friend (or let them scan the QR code), and draw on the same endless slate. Up to 5 people, no account, and no server of ours in the middle. Boards are saved in your browser.
+Press **Invite friends**, read six words to a friend (or let them scan the QR code), and draw on the same endless slate while you talk: chat with replies and reactions, a voice call with strong noise suppression, camera bubbles that float next to each cursor, and screen sharing. Up to 5 people, no account, and no server of ours in the middle. Boards are saved in your browser.
 
 <table>
   <tr>
@@ -27,6 +27,11 @@ Press **Invite friends**, read six words to a friend (or let them scan the QR co
     <td valign="top"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/icons/dark/pinch.svg"><img src="assets/icons/light/pinch.svg" width="28" alt=""></picture><br><b>Pan and pinch zoom</b><br>Two fingers on phones, big touch targets.</td>
     <td valign="top"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/icons/dark/install.svg"><img src="assets/icons/light/install.svg" width="28" alt=""></picture><br><b>Installable</b><br>A PWA that opens offline.</td>
     <td valign="top"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/icons/dark/globe.svg"><img src="assets/icons/light/globe.svg" width="28" alt=""></picture><br><b>English and Portuguese</b><br>Picked from your browser, switchable in settings.</td>
+  </tr>
+  <tr>
+    <td valign="top"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/icons/dark/chat.svg"><img src="assets/icons/light/chat.svg" width="28" alt=""></picture><br><b>Chat</b><br>Replies and reactions, saved with the board.</td>
+    <td valign="top"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/icons/dark/mic.svg"><img src="assets/icons/light/mic.svg" width="28" alt=""></picture><br><b>Voice with noise suppression</b><br>Browser filters plus our own DSP worklet, with a mic test.</td>
+    <td valign="top"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/icons/dark/bubbles.svg"><img src="assets/icons/light/bubbles.svg" width="28" alt=""></picture><br><b>Camera bubbles and screens</b><br>Small cameras float by each cursor; share a screen.</td>
   </tr>
 </table>
 
@@ -61,6 +66,7 @@ Each element is a map of fields, and each field is a last writer wins register s
 - Pen pressure needs a pen that reports it. With a mouse or a finger, the width follows your speed.
 - The eraser removes whole strokes and shapes. Pictures are scaled to 1600 pixels; animated GIFs keep their first frame.
 - Reloading the page ends the live session. Invite each other again and the boards merge back.
+- Calls are a full mesh: with five people each device sends its voice and camera four times, which needs a decent upload. Screen sharing needs a browser that supports it, so most phones cannot share.
 
 ## Meet Mabel and Otto
 
@@ -78,11 +84,11 @@ npm install
 npm test          # unit tests: CRDT convergence, smoothing, board file, pairing, mesh, QR
 npm run lint      # ESLint
 npm run rules     # house rules: no emoji, no long dashes, no product names
-npm run e2e       # three browser profiles pair with six words and draw at once
+npm run e2e       # three browser profiles pair with six words, draw, chat and call at once
 npm run serve     # http://127.0.0.1:8080/doodleduo/
 ```
 
-The site is plain static files in `docs/` with relative paths, served the same way as GitHub Pages. Shared modules live in `src/` and are copied to `docs/app/core/` with `npm run core`. Styles use [Monsoon](https://kwy404.github.io/monsoon/) and the interface is declared with [Voodoo.js](https://kwy404.github.io/Voodoo.js/).
+The site is plain static files in `docs/` with relative paths, served the same way as GitHub Pages. Chat, calls, the mesh and the noise suppression are adapted from [howlden](https://kwy404.github.io/howlden/). Shared modules live in `src/` and are copied to `docs/app/core/` with `npm run core`. Styles use [Monsoon](https://kwy404.github.io/monsoon/) and the interface is declared with [Voodoo.js](https://kwy404.github.io/Voodoo.js/).
 
 ## License
 

@@ -2,7 +2,7 @@
 <html lang="en" data-theme="dark">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="dark light">
 <script>(function(){try{var t=localStorage.getItem('voodoo:theme');if(t&&t.charAt(0)==='"')t=JSON.parse(t);var r=document.documentElement;r.setAttribute('data-theme',t==='light'?'light':'dark');r.style.colorScheme=t==='light'?'light':'dark'}catch(e){}})();</script>
 <title>doodleduo: draw together on one endless slate</title>
@@ -22,18 +22,17 @@
 <script type="module" src="site.js"></script>
 </head>
 <body class="antialiased">
-<a class="skip" href="#main">Skip to content</a>
-<svg class="trail" id="trail" aria-hidden="true" focusable="false" preserveAspectRatio="none"><path id="trail-path" d=""/></svg>
+<a class="skip" href="#story">Skip to the story</a>
 
 <header class="nav" v-data="{ open: false }" @keydown.escape="open = false">
-  <div class="wrap nav-row">
+  <div class="nav-row">
     <a href="./" class="brand"><img src="assets/head-dark.svg" width="34" height="34" alt=""><span>doodleduo</span></a>
     <nav class="nav-links" :class="{ 'is-open': open }" aria-label="Main">
-      <a href="#demo" @click="open = false">Try it</a>
-      <a href="#how" @click="open = false">How it works</a>
-      <a href="#features" @click="open = false">Features</a>
-      <a href="#private" @click="open = false">Privacy</a>
-      <a href="#faq" @click="open = false">FAQ</a>
+      <a href="#page-words" @click="open = false">Six words</a>
+      <a href="#page-talk" @click="open = false">Talk</a>
+      <a href="#page-merge" @click="open = false">Same board</a>
+      <a href="#page-private" @click="open = false">Privacy</a>
+      <a href="#page-faq" @click="open = false">FAQ</a>
     </nav>
     <div class="nav-end">
       <button type="button" class="btn btn-ghost btn-square btn-sm theme-btn" v-theme-toggle aria-label="Switch between dark and light" title="Dark or light"><svg class="ic ic-sun" aria-hidden="true"><use href="assets/icons.svg#i-sun"/></svg><svg class="ic ic-moon" aria-hidden="true"><use href="assets/icons.svg#i-moon"/></svg></button>
@@ -43,206 +42,177 @@
   </div>
 </header>
 
-<main id="main">
-  <section class="hero">
-    <div class="hero-sky" aria-hidden="true">
-      <svg class="hero-chalk" viewBox="0 0 1200 700" preserveAspectRatio="xMidYMid slice">
-        <path class="draw-on glow" d="M560 640 C660 560 720 690 840 620 S1020 520 1180 560"/>
-        <path class="draw-on soft" style="--d:.6s" d="M640 300 l14 -30 l14 30 l-34 -19 h40 z"/>
-        <path class="draw-on soft" style="--d:.9s" d="M1040 150 m-34 0 a34 34 0 1 0 68 0 a34 34 0 1 0 -68 0"/>
-        <path class="draw-on rose" style="--d:1.2s" d="M1110 300 c12 -16 30 -16 34 0 c4 -16 22 -16 34 0 c0 20 -34 36 -34 36 s-34 -16 -34 -36"/>
-        <path class="draw-on soft" style="--d:1.5s" d="M640 90 c30 -20 60 20 90 0 s60 -20 90 0"/>
-      </svg>
+<main>
+  <!-- The hero is the slate itself: draw on it right away. -->
+  <section class="slate" id="slate" aria-labelledby="slate-title" v-data="{}">
+    <canvas id="slate-canvas" class="slate-canvas" aria-label="A chalkboard you can draw on with a mouse, a finger or a pen" v-ignore></canvas>
+    <h1 id="slate-title" class="sr-only">doodleduo: draw together on one endless slate</h1>
+    <svg class="chalk-title" viewBox="0 0 1200 330" aria-hidden="true" focusable="false">
+      <text class="ct ct-1" x="600" y="140" text-anchor="middle">Draw together</text>
+      <text class="ct ct-2" x="600" y="270" text-anchor="middle">on one endless slate</text>
+      <path class="ct-line" d="M330 300 C470 284 700 312 870 292"/>
+    </svg>
+    <p class="slate-lead">A whiteboard for you and up to four friends, with chat, voice and camera bubbles. Six words to connect. No account, no server in the middle.</p>
+    <div class="slate-ducks" aria-hidden="true">
+      <img class="walker walker-mabel" id="walker-mabel" src="assets/mabel.svg" width="330" height="320" alt="">
+      <img class="walker walker-otto" id="walker-otto" src="assets/otto.svg" width="330" height="320" alt="">
     </div>
-    <div class="wrap hero-grid">
-      <div class="hero-copy">
-        <p class="eyebrow">Peer to peer whiteboard</p>
-        <h1>Draw together on one endless slate.</h1>
-        <p class="lead">A whiteboard for you and up to four friends. Share six words, and your strokes travel straight from browser to browser. No account, no server in the middle.</p>
-        <div class="cta">
-          <a href="app/" class="btn btn-primary btn-lg"><svg class="ic" aria-hidden="true"><use href="assets/icons.svg#i-pen"/></svg>Start drawing</a>
-          <a href="#demo" class="btn btn-ghost btn-lg">Try it right here</a>
+    <div class="bot bot-mabel" id="bot-mabel" aria-hidden="true" v-ignore><svg viewBox="0 0 16 22"><path d="M1 1 L1 18 L5.6 14 L9 21 L11.8 19.8 L8.6 13 L14.8 12.8 Z"/></svg><b>Mabel</b></div>
+    <div class="bot bot-otto" id="bot-otto" aria-hidden="true" v-ignore><svg viewBox="0 0 16 22"><path d="M1 1 L1 18 L5.6 14 L9 21 L11.8 19.8 L8.6 13 L14.8 12.8 Z"/></svg><b>Otto</b></div>
+    <div class="slate-tools">
+      <div class="chips" role="radiogroup" aria-label="Chalk color">
+        <button v-for="c in SLATE.colors" :key="c" type="button" class="chip" role="radio" :aria-checked="SLATE.color === c ? 'true' : 'false'" :aria-label="'Chalk ' + c" :style="{ '--c': c }" @click="SLATE.color = c"></button>
+      </div>
+      <span class="slate-hint" v-text="SLATE.count ? SLATE.count + (SLATE.count === 1 ? ' line' : ' lines') + ' on the slate. Mabel and Otto join in.' : 'Go ahead, draw anywhere on this slate.'">Go ahead, draw anywhere on this slate.</span>
+      <button type="button" class="btn btn-ghost btn-sm" @click="slateClear()"><svg class="ic" aria-hidden="true"><use href="assets/icons.svg#i-eraser"/></svg>Wipe</button>
+    </div>
+    <div class="slate-cta">
+      <a href="app/" class="btn btn-primary btn-lg"><svg class="ic" aria-hidden="true"><use href="assets/icons.svg#i-pen"/></svg>Start a board</a>
+      <a href="#story" class="btn btn-ghost btn-lg">Turn the page</a>
+    </div>
+  </section>
+
+  <!-- The story: notebook pages that turn as you scroll. -->
+  <div class="story" id="story">
+    <article class="page" id="page-words">
+      <div class="page-inner">
+        <p class="page-n">page 1</p>
+        <h2>Six words. That is the whole sign up.</h2>
+        <p class="sub">Press Invite friends and doodleduo writes six words on a note. Tear it off and read it to a friend, or let their phone camera scan the code.</p>
+        <div class="tearpad" id="tearpad">
+          <div class="pad-under" aria-hidden="true">
+            <svg class="pad-check" aria-hidden="true"><use href="assets/icons.svg#i-shield"/></svg>
+            <p>Your friend reads six new words back to you. If they match, nobody is in between.</p>
+          </div>
+          <button type="button" class="tearnote" id="tearnote" aria-label="Six example pairing words on a sticky note. Tear it off.">
+            <span class="perf" aria-hidden="true"></span>
+            <ol class="note-words">
+              <li>maple</li><li>river</li><li>quiet</li><li>orbit</li><li>lemon</li><li>tiger</li>
+            </ol>
+            <span class="note-foot">works once, for ten minutes</span>
+          </button>
         </div>
-        <ul class="facts">
-          <li><svg class="ic" aria-hidden="true"><use href="assets/icons.svg#i-people"/></svg>Up to 5 people</li>
-          <li><svg class="ic" aria-hidden="true"><use href="assets/icons.svg#i-words"/></svg>Six words or a QR code</li>
-          <li><svg class="ic" aria-hidden="true"><use href="assets/icons.svg#i-lock"/></svg>Boards stay on your device</li>
+        <ol class="hand-steps">
+          <li><b>1.</b> You get six words and a QR code.</li>
+          <li><b>2.</b> Your friend types them, or scans the code.</li>
+          <li><b>3.</b> They read six words back and you are drawing together.</li>
+        </ol>
+      </div>
+    </article>
+
+    <article class="page" id="page-talk">
+      <div class="page-inner">
+        <p class="page-n">page 2</p>
+        <h2>Talk while you draw.</h2>
+        <p class="sub">A chat with replies and reactions, a voice call with strong noise suppression, small camera bubbles that float next to each cursor, and screen sharing. All of it straight between you.</p>
+        <div class="talk-demo" aria-hidden="true">
+          <div class="talk-slate">
+            <svg class="talk-lines" viewBox="0 0 600 260"><path class="draw-on" d="M40 200 C120 80 200 220 290 120 S440 60 560 150"/><path class="draw-on" style="--d:.5s" d="M380 210 c14 -20 36 -20 40 0 c4 -20 26 -20 40 0 c0 24 -40 42 -40 42 s-40 -18 -40 -42"/></svg>
+            <div class="talk-cursor tc-a"><svg viewBox="0 0 16 22"><path d="M1 1 L1 18 L5.6 14 L9 21 L11.8 19.8 L8.6 13 L14.8 12.8 Z"/></svg><b>Bia</b><span class="cam"><img src="assets/head-dark.svg" alt=""></span></div>
+            <div class="talk-cursor tc-b"><svg viewBox="0 0 16 22"><path d="M1 1 L1 18 L5.6 14 L9 21 L11.8 19.8 L8.6 13 L14.8 12.8 Z"/></svg><b>Caio</b><span class="cam cam-otto"><img src="assets/otto.svg" alt=""></span></div>
+          </div>
+          <div class="talk-chat">
+            <p class="bubble"><b>Bia</b>Who is drawing the tent?</p>
+            <p class="bubble bubble-reply"><span class="quote">Bia: Who is drawing the tent?</span><b>Caio</b>Me, give me a minute</p>
+            <p class="reacts"><span><svg class="ic"><use href="assets/icons.svg#i-heart"/></svg>2</span><span><svg class="ic"><use href="assets/icons.svg#i-laugh"/></svg>1</span></p>
+          </div>
+          <div class="talk-bar"><svg class="ic"><use href="assets/icons.svg#i-mic"/></svg><svg class="ic"><use href="assets/icons.svg#i-camera"/></svg><svg class="ic"><use href="assets/icons.svg#i-screen"/></svg><svg class="ic"><use href="assets/icons.svg#i-wave"/></svg><span>3 in the call</span></div>
+        </div>
+      </div>
+    </article>
+
+    <article class="page" id="page-merge">
+      <div class="page-inner">
+        <p class="page-n">page 3</p>
+        <h2>Draw at once. It all lines up.</h2>
+        <p class="sub">Every person holds the whole board. Each change is a small message stamped with a logical clock, applied with the same rules everywhere, so two people moving the same note end up in the same place. Someone who joins late gets the full board, pictures and chat included.</p>
+        <figure class="scene">
+          <img class="only-dark" src="assets/art/late-joiner-dark.svg" width="640" height="400" alt="Someone who joins late receives the whole board from the people already drawing" loading="lazy">
+          <img class="only-light" src="assets/art/late-joiner.svg" width="640" height="400" alt="" loading="lazy">
+        </figure>
+      </div>
+    </article>
+
+    <article class="page" id="page-tools">
+      <div class="page-inner">
+        <p class="page-n">page 4</p>
+        <h2>Everything a slate needs.</h2>
+        <ul class="tools">
+          <li><svg class="ic" aria-hidden="true"><use href="assets/icons.svg#i-pen"/></svg><b>Pressure aware pen</b><span>Smooth lines. Mouse and fingers use your speed.</span></li>
+          <li><svg class="ic" aria-hidden="true"><use href="assets/icons.svg#i-highlighter"/></svg><b>Highlighter and eraser</b><span>The eraser lifts whole strokes and shapes.</span></li>
+          <li><svg class="ic" aria-hidden="true"><use href="assets/icons.svg#i-arrow"/></svg><b>Shapes, arrows, text</b><span>Rectangles, ellipses, lines and handwritten text.</span></li>
+          <li><svg class="ic" aria-hidden="true"><use href="assets/icons.svg#i-note"/></svg><b>Notes and pictures</b><span>Paste or drop a picture: compressed, sent to all.</span></li>
+          <li><svg class="ic" aria-hidden="true"><use href="assets/icons.svg#i-select"/></svg><b>Select, move, resize</b><span>Duplicate, bring to front, nudge with the keys.</span></li>
+          <li><svg class="ic" aria-hidden="true"><use href="assets/icons.svg#i-undo"/></svg><b>Undo that is yours</b><span>Never undoes what a friend just drew.</span></li>
+          <li><svg class="ic" aria-hidden="true"><use href="assets/icons.svg#i-pinch"/></svg><b>Endless, any screen</b><span>Two fingers pan and pinch on phones.</span></li>
+          <li><svg class="ic" aria-hidden="true"><use href="assets/icons.svg#i-export"/></svg><b>Boards you keep</b><span>Saved in your browser. PNG, SVG or a board file.</span></li>
+          <li><svg class="ic" aria-hidden="true"><use href="assets/icons.svg#i-install"/></svg><b>Install it</b><span>Opens offline. English and Portuguese.</span></li>
         </ul>
       </div>
-      <div class="hero-art">
-        <img class="hero-ducks only-light" src="assets/hero-light.svg" width="900" height="640" alt="">
-        <img class="hero-ducks only-dark" src="assets/hero.svg" width="900" height="640" alt="Mabel and Otto, two little ducks, drawing on the slate: Mabel bold with her chalk, Otto calm with his crayon">
-        <div class="note note-a float" aria-hidden="true"><span>bring snacks</span></div>
-        <div class="note note-b float" aria-hidden="true" style="--d:-2s"><span>plan for Saturday</span></div>
-        <div class="glide glide-a" aria-hidden="true"><svg viewBox="0 0 16 22"><path d="M1 1 L1 18 L5.6 14 L9 21 L11.8 19.8 L8.6 13 L14.8 12.8 Z"/></svg><b>Bia</b></div>
-        <div class="glide glide-b" aria-hidden="true"><svg viewBox="0 0 16 22"><path d="M1 1 L1 18 L5.6 14 L9 21 L11.8 19.8 L8.6 13 L14.8 12.8 Z"/></svg><b>Caio</b></div>
-      </div>
-    </div>
-  </section>
+    </article>
 
-  <section id="demo" class="section demo-section">
-    <div class="wrap">
-      <div class="section-head reveal">
-        <p class="eyebrow">Try it</p>
-        <h2>Doodle here. Otto is drawing too.</h2>
-        <p class="sub">This little slate runs the same smoothing as the app: lines follow your speed, or your pen pressure. Nothing leaves this page.</p>
-      </div>
-      <div class="demo reveal" v-data="{}">
-        <div class="demo-bar">
-          <div class="demo-colors" role="radiogroup" aria-label="Chalk color">
-            <button v-for="c in DEMO.colors" :key="c" type="button" class="chip" role="radio" :aria-checked="DEMO.color === c ? 'true' : 'false'" :aria-label="'Color ' + c" :style="{ '--c': c }" @click="DEMO.color = c"></button>
-          </div>
-          <span class="demo-hint" v-text="DEMO.count ? DEMO.count + (DEMO.count === 1 ? ' stroke' : ' strokes') + ' on the slate' : 'Draw with a mouse, a finger or a pen'"></span>
-          <button type="button" class="btn btn-ghost btn-sm" @click="demoClear()"><svg class="ic" aria-hidden="true"><use href="assets/icons.svg#i-eraser"/></svg>Clear</button>
-        </div>
-        <div class="demo-slate">
-          <canvas id="demo-canvas" aria-label="A small slate you can draw on" v-ignore></canvas>
-          <div class="glide demo-otto" id="demo-otto" aria-hidden="true" v-ignore><svg viewBox="0 0 16 22"><path d="M1 1 L1 18 L5.6 14 L9 21 L11.8 19.8 L8.6 13 L14.8 12.8 Z"/></svg><b>Otto</b></div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <section id="how" class="section">
-    <div class="wrap">
-      <div class="section-head reveal">
-        <p class="eyebrow">How it works</p>
-        <h2>Six words. That is the whole sign up.</h2>
-      </div>
-      <ol class="steps">
-        <li class="how-step reveal">
-          <span class="how-n">1</span>
-          <h3>Press Invite friends</h3>
-          <p>You get six words and a QR code. They work once, for ten minutes.</p>
-        </li>
-        <li class="how-step reveal" style="--d:.1s">
-          <span class="how-n">2</span>
-          <h3>Your friend types or scans them</h3>
-          <p>Their screen shows six new words. They read them to you and you type them, so you know nobody is in between.</p>
-        </li>
-        <li class="how-step reveal" style="--d:.2s">
-          <span class="how-n">3</span>
-          <h3>Draw at the same time</h3>
-          <p>Strokes, notes and pictures appear on every screen as they happen, with a cursor and a name for each person.</p>
-        </li>
-      </ol>
-      <figure class="scene reveal">
-        <img class="only-dark" src="assets/art/words-dark.svg" width="640" height="400" alt="Six words or a QR code connect two people, and six more words confirm it" loading="lazy">
-        <img class="only-light" src="assets/art/words.svg" width="640" height="400" alt="" loading="lazy">
-      </figure>
-    </div>
-  </section>
-
-  <section id="features" class="section">
-    <div class="wrap">
-      <div class="section-head reveal">
-        <p class="eyebrow">Features</p>
-        <h2>Everything a slate needs, and a little more.</h2>
-      </div>
-      <div class="features">
-        <article class="feature reveal"><svg class="ic" aria-hidden="true"><use href="assets/icons.svg#i-pen"/></svg><h3>A pen that feels right</h3><p>Smooth, pressure aware strokes. With a mouse or a finger, the width follows your speed.</p></article>
-        <article class="feature reveal"><svg class="ic" aria-hidden="true"><use href="assets/icons.svg#i-highlighter"/></svg><h3>Highlighter and eraser</h3><p>Mark over anything. The eraser lifts whole strokes and shapes off the slate.</p></article>
-        <article class="feature reveal"><svg class="ic" aria-hidden="true"><use href="assets/icons.svg#i-arrow"/></svg><h3>Shapes, arrows and text</h3><p>Rectangles, ellipses, lines, arrows and handwritten looking text.</p></article>
-        <article class="feature reveal"><svg class="ic" aria-hidden="true"><use href="assets/icons.svg#i-note"/></svg><h3>Sticky notes and pictures</h3><p>Notes in five muted colors. Paste or drop a picture: it is compressed and sent to everyone.</p></article>
-        <article class="feature reveal"><svg class="ic" aria-hidden="true"><use href="assets/icons.svg#i-select"/></svg><h3>Select, move, resize</h3><p>Grab one thing or a whole area, move it, resize it, duplicate it or bring it to the front.</p></article>
-        <article class="feature reveal"><svg class="ic" aria-hidden="true"><use href="assets/icons.svg#i-undo"/></svg><h3>Undo that is yours</h3><p>Undo and redo only touch your own changes, never what a friend just drew.</p></article>
-        <article class="feature reveal"><svg class="ic" aria-hidden="true"><use href="assets/icons.svg#i-pinch"/></svg><h3>Endless, on any screen</h3><p>Pan and zoom forever. On phones, two fingers pan and pinch. Big buttons for thumbs.</p></article>
-        <article class="feature reveal"><svg class="ic" aria-hidden="true"><use href="assets/icons.svg#i-export"/></svg><h3>Boards you keep</h3><p>Every board is saved in your browser. Export a PNG, an SVG or a board file.</p></article>
-        <article class="feature reveal"><svg class="ic" aria-hidden="true"><use href="assets/icons.svg#i-install"/></svg><h3>Install it, use it offline</h3><p>Add it to your home screen. Drawing alone works without a connection.</p></article>
-      </div>
-    </div>
-  </section>
-
-  <section id="merge" class="section">
-    <div class="wrap split">
-      <div class="reveal">
-        <p class="eyebrow">Always the same board</p>
-        <h2>Draw at once. It all lines up.</h2>
-        <p class="sub">Every person holds the whole board. Changes are small messages stamped with a logical clock, and every device applies them with the same rules, so two people moving the same note, or one recoloring it while the other drags it, end with the same result everywhere.</p>
-        <p class="sub">Someone who joins late receives the full board, pictures included, from whoever is already there.</p>
-      </div>
-      <figure class="scene reveal">
-        <img class="only-dark" src="assets/art/late-joiner-dark.svg" width="640" height="400" alt="Someone who joins late receives the whole board from the people already drawing" loading="lazy">
-        <img class="only-light" src="assets/art/late-joiner.svg" width="640" height="400" alt="" loading="lazy">
-      </figure>
-    </div>
-  </section>
-
-  <section id="private" class="section">
-    <div class="wrap split split-rev">
-      <figure class="scene reveal">
-        <img class="only-dark" src="assets/art/local-dark.svg" width="640" height="400" alt="Boards stay in this browser and export as PNG, SVG or a board file" loading="lazy">
-        <img class="only-light" src="assets/art/local.svg" width="640" height="400" alt="" loading="lazy">
-      </figure>
-      <div class="reveal">
-        <p class="eyebrow">Private by design</p>
+    <article class="page" id="page-private">
+      <div class="page-inner">
+        <p class="page-n">page 5</p>
         <h2>No account. No server of ours.</h2>
         <ul class="ticks">
-          <li>Drawings travel over encrypted WebRTC connections, directly between the people on the board.</li>
+          <li>Drawings, chat, voice and video travel over encrypted WebRTC connections, directly between the people on the board.</li>
           <li>To find each other, devices meet on public MQTT brokers. They only see a random topic and data sealed with a key made from your six words.</li>
-          <li>Six confirmation words come from the encryption keys of the connection itself. If someone sat in the middle, the words would not match.</li>
-          <li>Boards are stored in your browser and nowhere else.</li>
+          <li>The confirmation words come from the encryption keys of the connection itself. Someone in the middle would change them.</li>
+          <li>Boards and chat are stored in your browser and nowhere else.</li>
         </ul>
+        <figure class="scene">
+          <img class="only-dark" src="assets/art/local-dark.svg" width="640" height="400" alt="Boards stay in this browser and export as PNG, SVG or a board file" loading="lazy">
+          <img class="only-light" src="assets/art/local.svg" width="640" height="400" alt="" loading="lazy">
+        </figure>
       </div>
-    </div>
-  </section>
+    </article>
 
-  <section id="faq" class="section">
-    <div class="wrap narrow">
-      <div class="section-head reveal">
-        <p class="eyebrow">FAQ</p>
+    <article class="page" id="page-faq">
+      <div class="page-inner">
+        <p class="page-n">page 6</p>
         <h2>Good questions</h2>
+        <div class="faq">
+          <details><summary>Is it free?</summary><p>Yes, and open source under the MIT license. No ads, no tracking.</p></details>
+          <details><summary>How many people can join?</summary><p>Up to five on one board, you included. Anyone already on the board can invite the next person with new words.</p></details>
+          <details><summary>What happens when everyone closes the board?</summary><p>Each person keeps their copy in their browser. Next time, invite each other again and the copies merge back into one.</p></details>
+          <details><summary>Why did a connection fail?</summary><p>Some networks block direct connections. The app checks at start whether a public STUN server answers and explains what it finds. On strict networks you can add your own TURN server in the settings; none is built in.</p></details>
+          <details><summary>How good is the noise suppression?</summary><p>Strong mode runs the browser filters plus our own suppressor, which removes fans, hum and keyboard clicks while keeping your voice. You can test it on yourself in the settings.</p></details>
+          <details><summary>Can I keep a copy of a board?</summary><p>Export a PNG, an SVG or a board file. Opening a board file of a board you already have merges the two.</p></details>
+        </div>
       </div>
-      <div class="faq">
-        <details class="reveal"><summary>Is it free?</summary><p>Yes, and open source under the MIT license. There are no ads and no tracking.</p></details>
-        <details class="reveal"><summary>How many people can draw together?</summary><p>Up to five on one board, you included. Each new person gets their own six words from anyone already on the board.</p></details>
-        <details class="reveal"><summary>What happens when everyone closes the board?</summary><p>Each person keeps their copy in their browser. Next time, invite each other again and the boards merge back into one.</p></details>
-        <details class="reveal"><summary>Why did a connection fail?</summary><p>Some networks block direct connections. The app tests at start whether a public STUN server answers and explains what it finds. On strict networks you can add your own TURN server in the settings; none is built in.</p></details>
-        <details class="reveal"><summary>Does it work with a pen?</summary><p>Yes. Pens that report pressure get lines that thicken as you press. A mouse or a finger uses your speed instead.</p></details>
-        <details class="reveal"><summary>Can I keep a copy of a board?</summary><p>Export a PNG, an SVG or a board file. Opening a board file of a board you already have merges the two.</p></details>
-        <details class="reveal"><summary>Which languages?</summary><p>The app speaks English and Portuguese, and picks one from your browser. You can switch in the settings.</p></details>
-      </div>
-    </div>
-  </section>
+    </article>
 
-  <section class="section final">
-    <div class="wrap final-box reveal">
-      <img class="only-dark" src="assets/mascot-dark.svg" width="720" height="520" alt="Mabel and Otto, two ducks drawing on a night slate" loading="lazy">
-      <img class="only-light" src="assets/mascot.svg" width="720" height="520" alt="" loading="lazy">
-      <div>
+    <article class="page page-last" id="page-end">
+      <div class="page-inner">
+        <img class="only-dark end-art" src="assets/mascot-dark.svg" width="720" height="520" alt="Mabel and Otto, two ducks drawing on a night slate" loading="lazy">
+        <img class="only-light end-art" src="assets/mascot.svg" width="720" height="520" alt="" loading="lazy">
         <h2>Grab a friend and a slate.</h2>
         <p class="sub">Open the app, press Invite friends, read six words out loud.</p>
-        <a href="app/" class="btn btn-primary btn-lg">Start drawing</a>
+        <a href="app/" class="btn btn-primary btn-lg">Start a board</a>
       </div>
-    </div>
-  </section>
+    </article>
+  </div>
 </main>
 
 <footer class="foot">
-  <div class="wrap foot-grid">
-    <div class="foot-about">
-      <a href="./" class="brand"><img src="assets/head-dark.svg" width="34" height="34" alt=""><span>doodleduo</span></a>
-      <p>An endless slate for you and your friends, peer to peer in the browser.</p>
-      <p class="foot-small"><a href="app/">Open the app</a></p>
-    </div>
-    <nav aria-labelledby="more-title">
-      <h2 id="more-title" class="foot-title">More from kwy404</h2>
-      <ul class="foot-more">
-        <li><a href="https://kwy404.github.io/monsoon/">Monsoon</a></li>
-        <li><a href="https://kwy404.github.io/Voodoo.js/">Voodoo.js</a></li>
-        <li><a href="https://kwy404.github.io/kastor/">kastor</a></li>
-        <li><a href="https://kwy404.github.io/fontsketch/">fontsketch</a></li>
-        <li><a href="https://kwy404.github.io/filefinch/">filefinch</a></li>
-        <li><a href="https://kwy404.github.io/howlden/">howlden</a></li>
-        <li><a href="https://kwy404.github.io/installkite/">installkite</a></li>
-        <li><a href="https://kwy404.github.io/a11ymedic/">a11ymedic</a></li>
-        <li><a href="https://kwy404.github.io/cookieowl/">cookieowl</a></li>
-      </ul>
-    </nav>
-  </div>
-  <div class="wrap foot-bottom">
-    <p>Made by <a href="https://github.com/kwy404" rel="me noopener">Alexandre Kohler</a> <a class="foot-ic" href="https://github.com/kwy404" rel="me noopener" aria-label="Alexandre Kohler on GitHub"><svg class="ic" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4 1.3-4-2-6-2.5M15 21v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6.2 0C6.5 2.8 5.4 3.1 5.4 3.1a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4 9.5c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></svg></a> <a class="foot-ic" href="https://www.linkedin.com/in/alexandre-silva-173687256/" rel="me noopener" aria-label="Alexandre Kohler on LinkedIn"><svg class="ic" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 10v7M8 7v.01M12 17v-4a2 2 0 0 1 4 0v4M12 10v7"/></svg></a></p>
-    <p>Built with <a href="https://kwy404.github.io/monsoon/">Monsoon</a>. Interactive parts built with <a href="https://kwy404.github.io/Voodoo.js/">Voodoo.js</a>. MIT licensed.</p>
+  <div class="foot-inner">
+    <a href="./" class="brand"><img src="assets/head-dark.svg" width="34" height="34" alt=""><span>doodleduo</span></a>
+    <p class="foot-about">An endless slate for you and your friends, peer to peer in the browser. <a href="app/">Open the app</a>.</p>
+    <h2 class="foot-title">More from kwy404</h2>
+    <ul class="foot-more">
+      <li><a href="https://kwy404.github.io/monsoon/">Monsoon</a></li>
+      <li><a href="https://kwy404.github.io/Voodoo.js/">Voodoo.js</a></li>
+      <li><a href="https://kwy404.github.io/kastor/">kastor</a></li>
+      <li><a href="https://kwy404.github.io/fontsketch/">fontsketch</a></li>
+      <li><a href="https://kwy404.github.io/filefinch/">filefinch</a></li>
+      <li><a href="https://kwy404.github.io/howlden/">howlden</a></li>
+      <li><a href="https://kwy404.github.io/installkite/">installkite</a></li>
+      <li><a href="https://kwy404.github.io/a11ymedic/">a11ymedic</a></li>
+      <li><a href="https://kwy404.github.io/cookieowl/">cookieowl</a></li>
+    </ul>
+    <p class="foot-line">Made by <a href="https://github.com/kwy404" rel="me noopener">Alexandre Kohler</a> <a class="foot-ic" href="https://github.com/kwy404" rel="me noopener" aria-label="Alexandre Kohler on GitHub"><svg class="ic" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4 1.3-4-2-6-2.5M15 21v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6.2 0C6.5 2.8 5.4 3.1 5.4 3.1a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4 9.5c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></svg></a> <a class="foot-ic" href="https://www.linkedin.com/in/alexandre-silva-173687256/" rel="me noopener" aria-label="Alexandre Kohler on LinkedIn"><svg class="ic" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 10v7M8 7v.01M12 17v-4a2 2 0 0 1 4 0v4M12 10v7"/></svg></a></p>
+    <p class="foot-line">Built with <a href="https://kwy404.github.io/monsoon/">Monsoon</a>. Interactive parts built with <a href="https://kwy404.github.io/Voodoo.js/">Voodoo.js</a>. MIT licensed.</p>
   </div>
 </footer>
 </body>

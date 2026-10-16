@@ -2,7 +2,7 @@
 // works the same at the site root or under a sub-path such as /doodleduo/app/.
 
 // precache:start
-const CACHE_VERSION = 'd740f6ab9b00';
+const CACHE_VERSION = '320096e48b30';
 const PRECACHE = [
   './',
   'app.css',
