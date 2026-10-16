@@ -6,7 +6,7 @@
 <meta name="color-scheme" content="dark light">
 <script>(function(){try{var t=localStorage.getItem('voodoo:theme');if(t&&t.charAt(0)==='"')t=JSON.parse(t);var r=document.documentElement;r.setAttribute('data-theme',t==='light'?'light':'dark');r.style.colorScheme=t==='light'?'light':'dark'}catch(e){}})();</script>
 <title>doodleduo: draw together on one endless slate</title>
-<meta name="description" content="An infinite whiteboard you draw on with up to four friends at the same time, peer to peer in the browser. Six words to connect, no account.">
+<meta name="description" content="An infinite whiteboard you draw on with up to four friends at the same time, peer to peer in the browser. Six words, a QR code or a link to connect, no account.">
 <meta name="author" content="Alexandre Kohler">
 <meta name="theme-color" content="#0a0c0f">
 <meta property="og:type" content="website">
@@ -52,7 +52,7 @@
       <text class="ct ct-2" x="600" y="270" text-anchor="middle">on one endless slate</text>
       <path class="ct-line" d="M330 300 C470 284 700 312 870 292"/>
     </svg>
-    <p class="slate-lead">A whiteboard for you and up to four friends, with chat, voice and camera bubbles. Six words to connect. No account, no server in the middle.</p>
+    <p class="slate-lead">A whiteboard for you and up to four friends, with chat, voice, camera bubbles and screen sharing. Six words, a QR code or a link to connect. No account, no server in the middle.</p>
     <div class="slate-ducks" aria-hidden="true">
       <img class="walker walker-mabel" id="walker-mabel" src="assets/mabel.svg" width="330" height="320" alt="">
       <img class="walker walker-otto" id="walker-otto" src="assets/otto.svg" width="330" height="320" alt="">
@@ -78,7 +78,7 @@
       <div class="page-inner">
         <p class="page-n">page 1</p>
         <h2>Six words. That is the whole sign up.</h2>
-        <p class="sub">Press Invite friends and doodleduo writes six words on a note. Tear it off and read it to a friend, or let their phone camera scan the code.</p>
+        <p class="sub">Press Invite friends and doodleduo writes six words on a note. Read them to a friend, let their phone camera scan the code, or send the link. All three carry the same six words.</p>
         <div class="tearpad" id="tearpad">
           <div class="pad-under" aria-hidden="true">
             <svg class="pad-check" aria-hidden="true"><use href="assets/icons.svg#i-shield"/></svg>
@@ -89,12 +89,13 @@
             <ol class="note-words">
               <li>maple</li><li>river</li><li>quiet</li><li>orbit</li><li>lemon</li><li>tiger</li>
             </ol>
+            <span class="note-link">.../app/#join=maple-river-quiet-orbit-lemon-tiger</span>
             <span class="note-foot">works once, for ten minutes</span>
           </button>
         </div>
         <ol class="hand-steps">
-          <li><b>1.</b> You get six words and a QR code.</li>
-          <li><b>2.</b> Your friend types them, or scans the code.</li>
+          <li><b>1.</b> You get six words, a QR code and a link to copy.</li>
+          <li><b>2.</b> Your friend types the words, scans the code or opens the link.</li>
           <li><b>3.</b> They read six words back and you are drawing together.</li>
         </ol>
       </div>
@@ -104,7 +105,7 @@
       <div class="page-inner">
         <p class="page-n">page 2</p>
         <h2>Talk while you draw.</h2>
-        <p class="sub">A chat with replies and reactions, a voice call with strong noise suppression, small camera bubbles that float next to each cursor, and screen sharing. All of it straight between you.</p>
+        <p class="sub">A chat with replies and reactions, a voice call with strong noise suppression, small camera bubbles that float next to each cursor, and screen sharing. Mute, turn the camera off or pick another mic or camera at any time. All of it straight between you.</p>
         <div class="talk-demo" aria-hidden="true">
           <div class="talk-slate">
             <svg class="talk-lines" viewBox="0 0 600 260"><path class="draw-on" d="M40 200 C120 80 200 220 290 120 S440 60 560 150"/><path class="draw-on" style="--d:.5s" d="M380 210 c14 -20 36 -20 40 0 c4 -20 26 -20 40 0 c0 24 -40 42 -40 42 s-40 -18 -40 -42"/></svg>
@@ -158,6 +159,7 @@
         <ul class="ticks">
           <li>Drawings, chat, voice and video travel over encrypted WebRTC connections, directly between the people on the board.</li>
           <li>To find each other, devices meet on public MQTT brokers. They only see a random topic and data sealed with a key made from your six words.</li>
+          <li>In an invite link the words sit after the #, a part of the address the browser never sends to any server.</li>
           <li>The confirmation words come from the encryption keys of the connection itself. Someone in the middle would change them.</li>
           <li>Boards and chat are stored in your browser and nowhere else.</li>
         </ul>
@@ -188,7 +190,7 @@
         <img class="only-dark end-art" src="assets/mascot-dark.svg" width="720" height="520" alt="Mabel and Otto, two ducks drawing on a night slate" loading="lazy">
         <img class="only-light end-art" src="assets/mascot.svg" width="720" height="520" alt="" loading="lazy">
         <h2>Grab a friend and a slate.</h2>
-        <p class="sub">Open the app, press Invite friends, read six words out loud.</p>
+        <p class="sub">Open the app, press Invite friends, then read six words out loud or send the link.</p>
         <a href="app/" class="btn btn-primary btn-lg">Start a board</a>
       </div>
     </article>

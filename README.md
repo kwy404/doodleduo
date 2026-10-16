@@ -10,7 +10,12 @@
 <p align="center">An infinite whiteboard you draw on together with friends at the same time, peer to peer in the browser.<br>
 <a href="https://kwy404.github.io/doodleduo/">Website</a> &middot; <a href="https://kwy404.github.io/doodleduo/app/">Open the app</a> &middot; <a href="i18n/README.pt-BR.md">Leia em português</a></p>
 
-Press **Invite friends**, read six words to a friend (or let them scan the QR code), and draw on the same endless slate while you talk: chat with replies and reactions, a voice call with strong noise suppression, camera bubbles that float next to each cursor, and screen sharing. Up to 5 people, no account, and no server of ours in the middle. Boards are saved in your browser.
+Press **Invite friends** and send six words, a QR code or a link (all three carry the same words), then draw on the same endless slate while you talk: chat with replies and reactions, a voice call with strong noise suppression, camera bubbles that float next to each cursor, and screen sharing. Up to 5 people, no account, and no server of ours in the middle. Boards are saved in your browser.
+
+<picture>
+  <source media="(prefers-color-scheme: light)" srcset="assets/art/together.svg">
+  <img src="assets/art/together-dark.svg" width="100%" alt="Mabel and Otto draw on the same slate at once, each with a live cursor">
+</picture>
 
 <table>
   <tr>
@@ -35,14 +40,23 @@ Press **Invite friends**, read six words to a friend (or let them scan the QR co
   </tr>
 </table>
 
+## Talk while you draw
+
+<picture>
+  <source media="(prefers-color-scheme: light)" srcset="assets/art/talk.svg">
+  <img src="assets/art/talk-dark.svg" width="100%" alt="Mabel and Otto talk while they draw: camera bubbles by each cursor, a chat with a reply and a reaction, and a call with noise suppression">
+</picture>
+
+Everyone on the board can join the call. Mute, turn the camera off, share a screen, and pick the microphone, camera and speaker in the settings (the change applies during the call). Strong noise suppression runs the browser filters plus our own DSP AudioWorklet; the mic test lets you hear yourself after it.
+
 ## How pairing works
 
 <picture>
   <source media="(prefers-color-scheme: light)" srcset="assets/art/words.svg">
-  <img src="assets/art/words-dark.svg" width="100%" alt="Six words or a QR code connect two people, and six more words confirm it">
+  <img src="assets/art/words-dark.svg" width="100%" alt="Six words, a QR code or an invite link connect two people, and six more words confirm it">
 </picture>
 
-1. The inviter gets six words (66 random bits from the BIP39 English list) and a QR code. They work once, for ten minutes.
+1. The inviter gets six words (66 random bits from the BIP39 English list), a QR code and an invite link with a Copy button. All three carry the same words and work once, for ten minutes. The link looks like `.../app/#join=word-word-word-word-word-word`: the words sit in the hash, which the browser never sends to any server. Opening it drops the friend straight into the join, and the app clears the words from the address bar. Pasting the whole phrase (or the link) into any word box spreads it one word per box.
 2. Both devices derive a topic and an AES-GCM key from the words (PBKDF2, then HKDF) and meet on several public MQTT brokers at once. The brokers only see a random topic and ciphertext. The WebRTC offer and answer travel sealed with that key.
 3. Once connected, the friend's screen shows six confirmation words made from the DTLS fingerprints of the connection. The inviter types them back. If someone sat in the middle, the words would not match, and three wrong tries close the connection.
 
@@ -84,7 +98,7 @@ npm install
 npm test          # unit tests: CRDT convergence, smoothing, board file, pairing, mesh, QR
 npm run lint      # ESLint
 npm run rules     # house rules: no emoji, no long dashes, no product names
-npm run e2e       # three browser profiles pair with six words, draw, chat and call at once
+npm run e2e       # two browser profiles join by link, words and QR code, then draw, chat and call
 npm run serve     # http://127.0.0.1:8080/doodleduo/
 ```
 

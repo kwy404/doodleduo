@@ -1,5 +1,5 @@
 // Original art for doodleduo: Mabel and Otto, two little ducks holding crayons, a line icon set
-// and four chalk on slate scenes. Everything is drawn here as plain SVG strings in a dark slate
+// and five chalk on slate scenes. Everything is drawn here as plain SVG strings in a dark slate
 // palette and a calm light one, and written as standalone files for the README (assets/), the
 // site (docs/assets/) and the app (docs/app/). Scenes carry their own CSS animation, which also
 // plays inside an img tag, and stand still for people who prefer reduced motion.
@@ -118,6 +118,7 @@ export const ICONS = {
   maximize: '<path d="M9 4H4v5M15 4h5v5M20 15v5h-5M4 15v5h5"/>',
   minimize: '<path d="M4 9h5V4M20 9h-5V4M15 20v-5h5M9 20v-5H4"/>',
   wave: '<path d="M3 12h2M7 8v8M11 5v14M15 8v8M19 11v2"/>',
+  link: '<path d="M10.5 13.5a3.6 3.6 0 0 0 5.1 0l3.1-3.1a3.6 3.6 0 0 0-5.1-5.1l-1.2 1.2"/><path d="M13.5 10.5a3.6 3.6 0 0 0-5.1 0l-3.1 3.1a3.6 3.6 0 0 0 5.1 5.1l1.2-1.2"/>',
 };
 
 export function iconSvg(name, color) {
@@ -147,9 +148,12 @@ const slateBoard = (x, y, w, h, mode) => {
   return `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="18" fill="${p.slate}" stroke="${p.hair}"/><path d="${dots.join('')}" stroke="${p.faint}" stroke-width="2" stroke-linecap="round" opacity=".55"/>`;
 };
 
-/** A chalk line that draws itself: len is its path length (rounded up), delay in seconds. */
+/**
+ * A chalk line that draws itself: len is its path length (rounded up), delay in seconds. Only
+ * the one time 'draw' lines take dur; 'loop' lines keep the nine second cycle of their class.
+ */
 const chalkLine = (d, color, { w = 3, len = 600, delay = 0, dur = 1.6, cls = 'draw' } = {}) =>
-  `<path class="${cls}" d="${d}" fill="none" stroke="${color}" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round" filter="url(#chalk)" style="--l:${len};animation-delay:${delay}s;animation-duration:${dur}s" stroke-dasharray="${len}"/>`;
+  `<path class="${cls}" d="${d}" fill="none" stroke="${color}" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round" filter="url(#chalk)" style="--l:${len};animation-delay:${delay}s${cls === 'draw' ? `;animation-duration:${dur}s` : ''}" stroke-dasharray="${len}"/>`;
 
 const DRAW_CSS = '.draw{stroke-dashoffset:0;animation:draw 1.6s cubic-bezier(.5,0,.2,1) both}@keyframes draw{from{stroke-dashoffset:var(--l)}to{stroke-dashoffset:0}}';
 const LOOP_CSS = '.loop{animation:loopdraw 9s ease-in-out infinite both}@keyframes loopdraw{0%{stroke-dashoffset:var(--l)}22%,80%{stroke-dashoffset:0}92%,100%{stroke-dashoffset:var(--l);opacity:0}}';
@@ -192,12 +196,41 @@ ${slateBoard(60, 56, 270, 210, mode)}${tiles}
 <text x="320" y="182" text-anchor="middle" font-family="Inter, system-ui, sans-serif" font-size="13" fill="${p.muted}">or</text>
 ${slateBoard(410, 56, 170, 210, mode)}
 <g filter="url(#chalk)">${finder(430, 86)}${finder(530, 86)}${finder(430, 202)}<path d="${mods.join('')}" fill="${p.soft}"/></g>
-${chalkLine('M190 300 C260 340 380 340 450 300', p.accent, { len: 300, cls: 'loop', w: 2.4 })}
-<g class="ok"><circle cx="320" cy="333" r="17" fill="${p.slate2}" stroke="${p.accent}" stroke-width="2"/><path d="M312 333l6 6 10-11" fill="none" stroke="${p.accent}" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></g>
+<g class="lnk"><rect x="170" y="280" width="300" height="30" rx="15" fill="${p.slate2}" stroke="${p.hair}"/><g transform="translate(182 286) scale(.75)" fill="none" stroke="${p.accent}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONS.link}</g><text x="206" y="299.5" font-family="ui-monospace, Consolas, monospace" font-size="10.5" fill="${p.chalk}">#join=maple-river-quiet-orbit-lemon-tiger</text></g>
+${chalkLine('M200 330 C270 362 370 362 440 330', p.accent, { len: 280, cls: 'loop', w: 2.4 })}
+<g class="ok"><circle cx="320" cy="360" r="17" fill="${p.slate2}" stroke="${p.accent}" stroke-width="2"/><path d="M312 360l6 6 10-11" fill="none" stroke="${p.accent}" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></g>
 ${duck('mabel', { x: 40, y: 270, s: 1 })}
 ${duck('otto', { x: 480, y: 270, s: 1, flip: true })}`;
-  const style = `${LOOP_CSS}.t{animation:pop 9s ease-out infinite both}@keyframes pop{0%{opacity:0;transform:translateY(6px)}8%,88%{opacity:1;transform:none}100%{opacity:0}}.ok{transform-origin:320px 333px;animation:ok 9s ease-out infinite both}@keyframes ok{0%,30%{opacity:0;transform:scale(.6)}38%,86%{opacity:1;transform:none}100%{opacity:0}}${MOTION_OFF}`;
-  return svg(640, 400, body, { title: 'Six words or a QR code connect two people, and six more words confirm it', style });
+  const style = `${LOOP_CSS}.t{animation:pop 9s ease-out infinite both}@keyframes pop{0%{opacity:0;transform:translateY(6px)}8%,88%{opacity:1;transform:none}100%{opacity:0}}.lnk{animation:pop 9s ease-out infinite both;animation-delay:1.6s}.ok{transform-origin:320px 360px;animation:ok 9s ease-out infinite both}@keyframes ok{0%,30%{opacity:0;transform:scale(.6)}38%,86%{opacity:1;transform:none}100%{opacity:0}}${MOTION_OFF}`;
+  return svg(640, 400, body, { title: 'Six words, a QR code or an invite link connect two people, and six more words confirm it', style });
+}
+
+/** Talking while drawing: camera bubbles by the cursors, a chat with a reply and a reaction, and the call bar. */
+export function sceneTalk(mode) {
+  const p = PAL[mode];
+  // A duck face inside a round camera bubble, r is the radius.
+  const cam = (who, cx, cy, r, expr) =>
+    `<g><circle cx="${cx}" cy="${cy}" r="${r + 3}" fill="${p.bg}" stroke="${who === 'mabel' ? CURSORS[3] : CURSORS[0]}" stroke-width="2.4"/><g clip-path="url(#cam-${who})"><g transform="translate(${n(cx - r)} ${n(cy - r)}) scale(${n((2 * r) / 128)})"><rect width="128" height="128" fill="${p.slate2}"/>${fullDuck(who, { x: -46, y: -10, s: 1, view: 'front', expr, shadow: false, defs: 'a' })}</g></g></g>`;
+  const clip = (who, cx, cy, r) => `<clipPath id="cam-${who}"><circle cx="${cx}" cy="${cy}" r="${r}"/></clipPath>`;
+  const icon = (name, x, y, color) => `<g transform="translate(${x} ${y})" fill="none" stroke="${color}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${ICONS[name]}</g>`;
+  const bars = [0, 1, 2, 3, 4].map((i) => `<rect class="vb" x="${506 + i * 9}" y="330" width="5" height="22" rx="2.5" fill="${CURSORS[2]}" style="animation-delay:${(i * 0.13).toFixed(2)}s"/>`).join('');
+  const body = `<defs>${chalkFilter()}${sharedDefs('a')}${clip('mabel', 128, 92, 30)}${clip('otto', 330, 196, 30)}</defs><rect width="640" height="400" fill="${p.bg}"/>
+${slateBoard(28, 28, 584, 280, mode)}
+${chalkLine('M70 250 C130 150 190 270 250 180 S360 120 420 210', p.chalk, { len: 480, cls: 'loop' })}
+${chalkLine('M200 120 c12 -18 32 -18 36 0 c4 -18 24 -18 36 0 c0 22 -36 38 -36 38 s-36 -16 -36 -38', CURSORS[1], { len: 220, cls: 'loop', w: 2.8 })}
+<g class="m1">${cursor(CURSORS[3], 'Mabel', mode)}</g>${cam('mabel', 128, 92, 30, 'happy')}
+<g class="m2">${cursor(CURSORS[0], 'Otto', mode)}</g>${cam('otto', 330, 196, 30, 'calm')}
+<g class="b1"><rect x="440" y="52" width="150" height="50" rx="14" fill="${p.slate2}" stroke="${p.hair}"/><text x="454" y="72" font-family="Inter, system-ui, sans-serif" font-size="11" font-weight="700" fill="${CURSORS[3]}">Mabel</text><text x="454" y="90" font-family="Inter, system-ui, sans-serif" font-size="12" fill="${p.chalk}">Who draws the tent?</text></g>
+<g class="b2"><rect x="440" y="112" width="150" height="66" rx="14" fill="${p.slate2}" stroke="${p.hair}"/><path d="M452 124v14" stroke="${p.accent}" stroke-width="2" stroke-linecap="round"/><text x="460" y="134" font-family="Inter, system-ui, sans-serif" font-size="10" fill="${p.muted}">Mabel: Who draws the...</text><text x="454" y="154" font-family="Inter, system-ui, sans-serif" font-size="11" font-weight="700" fill="${CURSORS[0]}">Otto</text><text x="454" y="170" font-family="Inter, system-ui, sans-serif" font-size="12" fill="${p.chalk}">Me, one minute</text></g>
+<g class="b3"><rect x="440" y="186" width="44" height="24" rx="12" fill="${p.slate2}" stroke="${p.hair}"/>${icon('heart', 446, 188, CURSORS[1])}<text x="472" y="202.5" font-family="Inter, system-ui, sans-serif" font-size="11" font-weight="600" fill="${p.chalk}">2</text></g>
+<rect x="190" y="322" width="260" height="38" rx="19" fill="${p.slate2}" stroke="${p.hair}"/>
+${icon('mic', 210, 329, p.chalk)}${icon('camera', 250, 329, p.chalk)}${icon('screen', 290, 329, p.chalk)}
+<text x="330" y="346" font-family="Inter, system-ui, sans-serif" font-size="12" fill="${p.muted}">2 in the call</text>
+<circle cx="425" cy="341" r="11" fill="#c9a3a6"/><path d="M419 342.5c4-3 8-3 12 0" fill="none" stroke="#15181c" stroke-width="2" stroke-linecap="round"/>
+${bars}
+<text x="530" y="372" text-anchor="middle" font-family="Inter, system-ui, sans-serif" font-size="10.5" fill="${p.muted}">noise suppressed</text>`;
+  const style = `${LOOP_CSS}.m1{animation:m1 9s ease-in-out infinite;transform:translate(158px,118px)}@keyframes m1{0%,100%{transform:translate(158px,118px)}50%{transform:translate(166px,110px)}}.m2{transform:translate(360px,222px)}.b1,.b2,.b3{animation:pop 9s ease-out infinite both}.b2{animation-delay:1.4s}.b3{animation-delay:2.6s}@keyframes pop{0%{opacity:0;transform:translateY(6px)}8%,88%{opacity:1;transform:none}100%{opacity:0}}.vb{transform-box:fill-box;transform-origin:center;animation:vb 1.1s ease-in-out infinite alternate}@keyframes vb{from{transform:scaleY(.3)}to{transform:scaleY(1)}}${MOTION_OFF}`;
+  return svg(640, 400, body, { title: 'Mabel and Otto talk while they draw: camera bubbles by each cursor, a chat with a reply and a reaction, and a call with noise suppression', style });
 }
 
 export function sceneLateJoiner(mode) {
@@ -252,7 +285,7 @@ function write(file, text) {
 }
 
 export function build(root = '.') {
-  const scenes = { together: sceneTogether, words: sceneWords, 'late-joiner': sceneLateJoiner, local: sceneLocal };
+  const scenes = { together: sceneTogether, words: sceneWords, talk: sceneTalk, 'late-joiner': sceneLateJoiner, local: sceneLocal };
   const out = [];
   for (const dir of ['assets', 'docs/assets']) {
     for (const mode of ['light', 'dark']) {
